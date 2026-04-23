@@ -89,18 +89,33 @@
     <!-- 成功行銷引導 Modal -->
     <div id="successModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md modal-hide">
         <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl text-center border-b-8 border-amber-400">
+            <!-- 頂部 Header -->
             <div class="bg-blue-600 py-10 text-white">
-                <div class="text-6xl mb-4">✨</div>
+                <div class="mb-4 flex justify-center">
+                    <!-- 使用圖片標籤，確保檔案名稱與 GitHub 上的完全一致 (區分大小寫) -->
+                    <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-lg overflow-hidden">
+                        <img 
+                            src="./不老松logo.png" 
+                            alt="Logo" 
+                            class="w-full h-full object-contain"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                        >
+                        <!-- Fallback SVG (當圖片找不到時顯示) -->
+                        <svg class="w-12 h-12 text-blue-600 hidden" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="text-2xl font-black italic" data-i18n="modalTitle">感謝您的回饋！</h3>
                 <p class="text-xs opacity-80 mt-2 font-bold uppercase tracking-widest" data-i18n="modalSub">Feedback Successfully Received</p>
             </div>
             <div class="p-8 space-y-6">
-                <p class="text-gray-600 font-bold text-sm leading-relaxed" data-i18n="modalText">您的支持是我們進步的動力。<br>邀請您留下 5 星好評！</p>
+                <p id="modalText" class="text-gray-600 font-bold text-sm leading-relaxed" data-i18n="modalText">您的支持是我們進步的動力。<br>邀請您留下 5 星好評！</p>
                 <div class="space-y-3">
-                    <button onclick="handleMarketingAction('Reviewed')" class="btn-active-highlight block w-full font-black py-4 rounded-2xl shadow-lg transition-all text-lg flex items-center justify-center gap-2">
+                    <button id="googleReviewBtn" onclick="handleMarketingAction('Reviewed')" class="btn-active-highlight block w-full font-black py-4 rounded-2xl shadow-lg transition-all text-lg flex items-center justify-center gap-2">
                         <span>⭐</span> <span data-i18n="modalGoGoogle">馬上評論</span>
                     </button>
-                    <button onclick="handleMarketingAction('Dismissed')" class="btn-dimmed block w-full font-bold py-3 rounded-2xl transition-all text-sm" data-i18n="modalClose">下次再評</button>
+                    <button id="modalCloseBtn" onclick="handleMarketingAction('Dismissed')" class="btn-dimmed block w-full font-bold py-3 rounded-2xl transition-all text-sm" data-i18n="modalClose">下次再評</button>
                 </div>
             </div>
         </div>
@@ -130,7 +145,6 @@
     let isAuthorized = false;
     let lastDocId = null;
 
-    // --- 自動化對齊翻譯庫 (核心字典) ---
     const translations = {
         zh: { 
             title: "服務意見調查表", branchLabel: "服務分店", branchName: "中清行館", dateLabel: "服務日期 *", 
@@ -145,7 +159,10 @@
             q9: "師傅服務結束送客有主動給您名片嗎？", q9_a1: "熱情主動", q9_a2: "要了才給", q9_a3: "沒有給名片", 
             q10: "今天服務的師傅會讓您下次再老點他嗎？", q10_a1: "一定老點", q10_a2: "再試試看", q10_a3: "絕對不會", 
             masseurIdLabel: "師傅號碼 *", submitBtn: "提交問卷 Submit", ph_masseur: "輸入編號", ph_name: "輸入姓名", ph_phone: "輸入電話", ph_suggest: "您的建議...", suc: "✅ 提交成功！", err: "❌ 寫入失敗", authReady: "Secure Cloud Ready",
-            modalTitle: "感謝您的回饋！", modalSub: "Success Received", modalText: "您的支持是我們進步的動力。<br>邀請您留下 5 星好評！", modalGoGoogle: "馬上評論", modalClose: "下次再評"
+            modalTitle: "感謝您的回饋！", modalSub: "Success Received", 
+            modalText: "您的支持是我們進步的動力。<br>邀請您留下 5 星好評！", 
+            modalTextNegative: "我們已收到您的回饋，<br>這將作為我們改進的重要參考。", 
+            modalGoGoogle: "馬上評論", modalClose: "下次再評", modalCloseNegative: "關閉視窗"
         },
         en: { 
             title: "Service Survey", branchLabel: "Branch", branchName: "Zhongqing Branch", dateLabel: "Date *", 
@@ -160,7 +177,10 @@
             q9: "Business card offered?", q9_a1: "Proactive", q9_a2: "Requested", q9_a3: "No",
             q10: "Would you re-book?", q10_a1: "Definitely", q10_a2: "Maybe", q10_a3: "Never", 
             masseurIdLabel: "Masseur ID *", submitBtn: "Submit Survey", ph_masseur: "ID No.", ph_name: "Name", ph_phone: "Phone", ph_suggest: "Feedback...", suc: "✅ Submitted!", err: "❌ Failed", authReady: "Secure Cloud Ready",
-            modalTitle: "Thank You!", modalSub: "Success Received", modalText: "We value your feedback.<br>Please leave a 5-star review!", modalGoGoogle: "Review Now", modalClose: "Maybe Later"
+            modalTitle: "Thank You!", modalSub: "Success Received", 
+            modalText: "We value your feedback.<br>Please leave a 5-star review!", 
+            modalTextNegative: "Your feedback has been received.<br>It will help us improve our service.", 
+            modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
         },
         ja: { 
             title: "サービスアンケート", branchLabel: "店舗", branchName: "中清店", dateLabel: "日付 *", 
@@ -168,19 +188,22 @@
             q2: "力加減の確認は？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "なし",
             q3: "臭いは気になりましたか？", q3_a1: "なし", q3_a2: "少し", q3_a3: "非常に",
             q4: "時間配分は適切？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "悪い",
-            q5: "マナーが不適切？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失礼",
+            q5: "マナーが不適切？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失禮",
             q6: "不快な身體接觸は？", q6_a1: "適切", q6_a2: "気まずい", q6_a3: "不快",
             q7: "危険な動作は？", q7_a1: "なかった", q7_a2: "少し危ない", q7_a3: "非常に危險",
             q8: "キャンペーン案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なかった",
             q9: "名刺の提供は？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なかった",
             q10: "次回も指名？", q10_a1: "必ず指名", q10_a2: "また試す", q10_a3: "しない", 
             masseurIdLabel: "スタッフ番号 *", submitBtn: "送信する", ph_masseur: "番号", ph_name: "名前", ph_phone: "電話", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
-            modalTitle: "ありがとうございます！", modalSub: "Success Received", modalText: "満足いただけましたら、5つ星をお願いします！", modalGoGoogle: "今すぐ評価", modalClose: "次回にする"
+            modalTitle: "ありがとうございます！", modalSub: "Success Received", 
+            modalText: "満足いただけましたら、5つ星をお願いします！", 
+            modalTextNegative: "貴重なご意見ありがとうございます。<br>改善の参考にさせていただきます。", 
+            modalGoGoogle: "今すぐ評価", modalClose: "次回にする", modalCloseNegative: "閉じる"
         },
         ko: { 
             title: "서비스 만족도 조사", branchLabel: "지점", branchName: "중청점", dateLabel: "날짜 *", 
             q1: "번호 안내가 있었습니까？", q1_a1: "적극 안내", q1_a2: "나중에", q1_a3: "없음", 
-            q2: "압력 조절 확인은？", q2_a1: "적극 확인", q2_a2: "수동적", q2_a3: "없음",
+            q2: "압력 조節 확인은？", q2_a1: "적극 확인", q2_a2: "수동적", q2_a3: "없음",
             q3: "체취가 불편했습니까？", q3_a1: "없음", q3_a2: "약간", q3_a3: "심함",
             q4: "시간 관리는？", q4_a1: "만족", q4_a2: "보통", q4_a3: "불만",
             q5: "매너가 무례했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
@@ -190,7 +213,10 @@
             q9: "명함 제공은？", q9_a1: "적극적", q9_a2: "요청 시", q9_a3: "없음",
             q10: "또 지명하시겠습니까？", q10_a1: "꼭 지명", q10_a2: "다시 시도", q10_a3: "안 함", 
             masseurIdLabel: "관리사 번호 *", submitBtn: "설문 제출", ph_masseur: "번호", ph_name: "성함", ph_phone: "전화", ph_suggest: "의견...", suc: "✅ 제출되었습니다！", err: "❌ 실패", authReady: "연결 완료",
-            modalTitle: "감사합니다!", modalSub: "Success Received", modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", modalGoGoogle: "지금 리뷰하기", modalClose: "다음에 하기"
+            modalTitle: "감사합니다!", modalSub: "Success Received", 
+            modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", 
+            modalTextNegative: "보내주신 의견 감사합니다.<br>더 나은 서비스를 위해 노력하겠습니다.", 
+            modalGoGoogle: "지금 리뷰하기", modalClose: "다음에 하기", modalCloseNegative: "닫기"
         }
     };
 
@@ -201,7 +227,6 @@
         dateInput.max = toISO(now); dateInput.min = toISO(yesterday); dateInput.value = toISO(now);
     }
 
-    // --- 自動對齊渲染引擎 ---
     function renderQuestions() {
         const container = document.getElementById('questionsContainer'); if(!container) return;
         container.innerHTML = '';
@@ -222,27 +247,22 @@
         }
     }
 
-    // --- 全方位自動對齊翻譯引擎 ---
     window.changeLang = function(lang) {
         document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
         const activeBtn = document.getElementById(`btn-${lang}`); if(activeBtn) activeBtn.classList.add('active');
         const trans = translations[lang] || translations['zh'];
         
-        // 1. 對齊所有 data-i18n 標籤 (包含動態題目與選項)
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             if (trans[key]) {
                 el.innerHTML = trans[key];
-                
-                // 核心邏輯：如果是 Radio 的 Label Span，同步更新其 Input 的 Value
                 const radioInput = el.previousElementSibling;
                 if (radioInput && radioInput.type === 'radio') {
-                    radioInput.value = trans[key]; // 確保寫入 Firestore 的內容隨語言變動
+                    radioInput.value = trans[key]; 
                 }
             }
         });
         
-        // 2. 對齊所有 data-ph 佔位符
         document.querySelectorAll('[data-ph]').forEach(el => {
             const key = el.getAttribute('data-ph');
             if (trans[key]) el.placeholder = trans[key];
@@ -278,20 +298,63 @@
         const t = translations[lang];
         
         btn.disabled = true; btn.innerText = "...Processing...";
+        
+        let hasNegativeRating = false;
         const ratings = {};
         for(let i=1; i<=10; i++) {
+            const radioGroup = document.getElementsByName(`q${i}`);
+            if (radioGroup[2].checked) {
+                hasNegativeRating = true;
+            }
             const c = document.querySelector(`input[name="q${i}"]:checked`);
             ratings[`q${i}`] = c ? c.value : null;
         }
-        const surveyData = { branch: t.branchName, masseurId: document.getElementById('masseurId').value, customerName: document.getElementById('custName').value || "Anonymous", customerPhone: document.getElementById('custPhone').value || "N/A", serviceDate: document.getElementById('serviceDate').value, suggestions: document.getElementById('suggestions').value, ratings: ratings, submittedLang: lang, createdAt: serverTimestamp(), marketingAction: 'Pending' };
+
+        const suggestionText = document.getElementById('suggestions').value.trim();
+        const shouldHideMarketing = hasNegativeRating || suggestionText.length > 0;
+
+        const surveyData = { 
+            branch: t.branchName, 
+            masseurId: document.getElementById('masseurId').value, 
+            customerName: document.getElementById('custName').value || "Anonymous", 
+            customerPhone: document.getElementById('custPhone').value || "N/A", 
+            serviceDate: document.getElementById('serviceDate').value, 
+            suggestions: suggestionText, 
+            ratings: ratings, 
+            submittedLang: lang, 
+            createdAt: serverTimestamp(), 
+            marketingAction: 'Pending',
+            isFilteredNegative: shouldHideMarketing 
+        };
+
         try {
             const docRef = await addDoc(collection(db, 'apps', 'zhongqing-v1', 'surveys'), surveyData);
             lastDocId = docRef.id;
+            
+            // --- 動態調整彈窗內容 ---
+            const googleBtn = document.getElementById('googleReviewBtn');
+            const modalTextEl = document.getElementById('modalText');
+            const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+            if (shouldHideMarketing) {
+                googleBtn.style.display = 'none'; 
+                modalTextEl.innerHTML = t.modalTextNegative; 
+                modalCloseBtn.innerText = t.modalCloseNegative; 
+            } else {
+                googleBtn.style.display = 'flex'; 
+                modalTextEl.innerHTML = t.modalText; 
+                modalCloseBtn.innerText = t.modalClose; 
+            }
+
             document.getElementById('surveyForm').reset();
             applyTimeConstraints();
             document.getElementById('successModal').classList.replace('modal-hide', 'modal-show');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch(err) { showToast(`${t.err} (${err.code})`, "bg-red-600"); } finally { btn.disabled = false; btn.innerText = t.submitBtn; }
+        } catch(err) { 
+            showToast(`${t.err} (${err.code})`, "bg-red-600"); 
+        } finally { 
+            btn.disabled = false; btn.innerText = t.submitBtn; 
+        }
     });
 
     function showToast(msg, color) {
@@ -300,7 +363,13 @@
         t.className = `fixed bottom-10 left-1/2 -translate-x-1/2 ${color} text-white px-8 py-4 rounded-full shadow-2xl transition-all z-50 text-sm font-bold min-w-[280px] opacity-100 text-center`;
         setTimeout(() => t.className = t.className.replace('opacity-100', 'opacity-0'), 5000);
     }
-    window.onload = () => { renderQuestions(); applyTimeConstraints(); window.changeLang('zh'); signInAnonymously(auth); };
+    
+    window.onload = () => { 
+        renderQuestions(); 
+        applyTimeConstraints(); 
+        window.changeLang('zh'); 
+        signInAnonymously(auth); 
+    };
 </script>
 </body>
 </html>
