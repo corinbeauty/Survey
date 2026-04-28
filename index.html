@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>服務意見調查表</title>
+    <title>服務意見調查表 - 中清行館</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
         
-        /* 語系切換按鈕效果 */
         .lang-btn { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background-color: white; color: #4b5563; border: 1px solid #e5e7eb; }
         .lang-btn.active { 
             background-color: #2563eb !important; 
@@ -19,17 +18,13 @@
             transform: translateY(-1px);
         }
 
-        /* 表單元素美化 */
-        input[type="radio"]:checked + span { color: #2563eb; font-weight: 700; }
         .question-card { border-radius: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         input:focus, textarea:focus { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); background-color: white !important; border-color: #2563eb !important; }
         #submitBtn:disabled { background-color: #94a3b8; cursor: not-allowed; opacity: 0.5; }
         
-        /* 移除編號上下箭頭 */
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
 
-        /* 成功彈窗 */
         #successModal { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
         .modal-show { opacity: 1; pointer-events: auto; transform: scale(1); }
         .modal-hide { opacity: 0; pointer-events: none; transform: scale(0.95); }
@@ -41,7 +36,6 @@
         }
         .btn-active-highlight { animation: pulse-gold 2s infinite; background-color: #fbbf24; color: #1e293b; }
         .btn-dimmed { background-color: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
-        .status-ready { color: #10b981 !important; font-weight: 900; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen pb-12">
@@ -65,7 +59,6 @@
                 <div class="flex items-center text-gray-800 font-bold text-lg italic">📍 <span data-i18n="branchName">中清行館</span></div>
             </div>
 
-            <!-- 動態生成題目 -->
             <div id="questionsContainer" class="space-y-4"></div>
 
             <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
@@ -86,24 +79,12 @@
         </form>
     </main>
 
-    <!-- 成功行銷引導 Modal -->
     <div id="successModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md modal-hide">
         <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl text-center border-b-8 border-amber-400">
-            <!-- 頂部 Header -->
             <div class="bg-blue-600 py-10 text-white">
                 <div class="mb-4 flex justify-center">
-                    <!-- 使用圖片標籤，確保檔案名稱與 GitHub 上的完全一致 (區分大小寫) -->
                     <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-lg overflow-hidden">
-                        <img 
-                            src="./不老松logo.png" 
-                            alt="Logo" 
-                            class="w-full h-full object-contain"
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                        >
-                        <!-- Fallback SVG (當圖片找不到時顯示) -->
-                        <svg class="w-12 h-12 text-blue-600 hidden" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/>
-                        </svg>
+                        <img src="https://cdn-icons-png.flaticon.com/512/1160/1160358.png" alt="Logo" class="w-full h-full object-contain">
                     </div>
                 </div>
                 <h3 class="text-2xl font-black italic" data-i18n="modalTitle">感謝您的回饋！</h3>
@@ -135,8 +116,7 @@
         projectId: "survey-c3aa5",
         storageBucket: "survey-c3aa5.firebasestorage.app",
         messagingSenderId: "874594469122",
-        appId: "1:874594469122:web:2b2c1208b20d2095b9ae1b",
-        measurementId: "G-B5T1318ZR4"
+        appId: "1:874594469122:web:2b2c1208b20d2095b9ae1b"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -144,6 +124,28 @@
     const db = getFirestore(app);
     let isAuthorized = false;
     let lastDocId = null;
+
+    const apiKey = ""; // Gemini API Key
+    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+
+    async function checkIsNegativeSentiment(text) {
+        if (!text || text.trim().length === 0) return false;
+        const prompt = `你是一個專業分析師。請分析這段文字是正向還是負向投訴。只需回傳一個單字：NEGATIVE 或 POSITIVE。內容：${text}`;
+        const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+        try {
+            const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            const sentiment = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
+            return sentiment === "NEGATIVE";
+        } catch (err) {
+            return text.length > 5;
+        }
+    }
 
     const translations = {
         zh: { 
@@ -183,40 +185,40 @@
             modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
         },
         ja: { 
-            title: "サービスアンケート", branchLabel: "店舗", branchName: "中清店", dateLabel: "日付 *", 
-            q1: "番号紹介はありましたか？", q1_a1: "積極的", q1_a2: "後で", q1_a3: "なし", 
-            q2: "力加減の確認は？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "なし",
-            q3: "臭いは気になりましたか？", q3_a1: "なし", q3_a2: "少し", q3_a3: "非常に",
-            q4: "時間配分は適切？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "悪い",
-            q5: "マナーが不適切？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失禮",
-            q6: "不快な身體接觸は？", q6_a1: "適切", q6_a2: "気まずい", q6_a3: "不快",
-            q7: "危険な動作は？", q7_a1: "なかった", q7_a2: "少し危ない", q7_a3: "非常に危險",
-            q8: "キャンペーン案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なかった",
-            q9: "名刺の提供は？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なかった",
-            q10: "次回も指名？", q10_a1: "必ず指名", q10_a2: "また試す", q10_a3: "しない", 
-            masseurIdLabel: "スタッフ番号 *", submitBtn: "送信する", ph_masseur: "番号", ph_name: "名前", ph_phone: "電話", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
+            title: "サービスアンケート", branchLabel: "店舗", branchName: "中清行館", dateLabel: "日付 *", 
+            q1: "番号紹介とコース確認はありましたか？", q1_a1: "積極的", q1_a2: "後で", q1_a3: "全くなし", 
+            q2: "力加減の確認はありましたか？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "全くなし",
+            q3: "臭い(体臭/煙草)は気になりましたか？", q3_a1: "気にならない", q3_a2: "少し気になる", q3_a3: "非常に気になる",
+            q4: "時間配分は適切でしたか？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "非常に悪い",
+            q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失礼",
+            q6: "不快な身体接触はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
+            q7: "禁止されている危険な動作は？", q7_a1: "全くなし", q7_a2: "少し危ない", q7_a3: "非常に危険",
+            q8: "キャンペーンの案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
+            q9: "名刺の提供はありましたか？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なし",
+            q10: "次回も指名されますか？", q10_a1: "必ず指名", q10_a2: "検討中", q10_a3: "しない", 
+            masseurIdLabel: "スタッフ番号 *", submitBtn: "アンケート送信", ph_masseur: "番号入力", ph_name: "お名前", ph_phone: "電話番号", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
             modalTitle: "ありがとうございます！", modalSub: "Success Received", 
             modalText: "満足いただけましたら、5つ星をお願いします！", 
             modalTextNegative: "貴重なご意見ありがとうございます。<br>改善の参考にさせていただきます。", 
-            modalGoGoogle: "今すぐ評価", modalClose: "次回にする", modalCloseNegative: "閉じる"
+            modalGoGoogle: "評価する", modalClose: "閉じる", modalCloseNegative: "閉じる"
         },
         ko: { 
             title: "서비스 만족도 조사", branchLabel: "지점", branchName: "중청점", dateLabel: "날짜 *", 
-            q1: "번호 안내가 있었습니까？", q1_a1: "적극 안내", q1_a2: "나중에", q1_a3: "없음", 
-            q2: "압력 조節 확인은？", q2_a1: "적극 확인", q2_a2: "수동적", q2_a3: "없음",
-            q3: "체취가 불편했습니까？", q3_a1: "없음", q3_a2: "약간", q3_a3: "심함",
-            q4: "시간 관리는？", q4_a1: "만족", q4_a2: "보통", q4_a3: "불만",
-            q5: "매너가 무례했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
-            q6: "불편한 신체 접촉은？", q6_a1: "전문적", q6_a2: "당황함", q6_a3: "불쾌함",
-            q7: "위험한 동작은？", q7_a1: "없음", q7_a2: "위험", q7_a3: "매우 위험",
-            q8: "이벤트 안내는？", q8_a1: "적극적", q8_a2: "수動적", q8_a3: "없음",
-            q9: "명함 제공은？", q9_a1: "적극적", q9_a2: "요청 시", q9_a3: "없음",
-            q10: "또 지명하시겠습니까？", q10_a1: "꼭 지명", q10_a2: "다시 시도", q10_a3: "안 함", 
-            masseurIdLabel: "관리사 번호 *", submitBtn: "설문 제출", ph_masseur: "번호", ph_name: "성함", ph_phone: "전화", ph_suggest: "의견...", suc: "✅ 제출되었습니다！", err: "❌ 실패", authReady: "연결 완료",
+            q1: "번호 안내 및 코스 확인이 있었습니까？", q1_a1: "적극 안내", q1_a2: "나중에", q1_a3: "전혀 없음", 
+            q2: "압력 조절 확인은 적절했습니까？", q2_a1: "적극 확인", q2_a2: "수동적", q2_a3: "전혀 없음",
+            q3: "체취나 담배 냄새가 불편했습니까？", q3_a1: "전혀 없음", q3_a2: "약간 있음", q3_a3: "매우 심함",
+            q4: "시간 관리는 적절했습니까？", q4_a1: "매우 만족", q4_a2: "보통", q4_a3: "불만족",
+            q5: "관리사의 매너는 어떠했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
+            q6: "불편한 신체 접촉이 있었습니까？", q6_a1: "전문적임", q6_a2: "약간 당황", q6_a3: "매우 불쾌",
+            q7: "위험한 동작이 있었습니까？", q7_a1: "전혀 없음", q7_a2: "약간 위험", q7_a3: "매우 위험",
+            q8: "이벤트 및 프로모션 안내는？", q8_a1: "적극 안내", q8_a2: "수동적", q8_a3: "전혀 없음",
+            q9: "명함 제공은 적극적이었습니까？", q9_a1: "적극 제공", q9_a2: "요청 시", q9_a3: "제공 안함",
+            q10: "다시 지명하시겠습니까？", q10_a1: "꼭 지명함", q10_a2: "생각 중", q10_a3: "안 함", 
+            masseurIdLabel: "관리사 번호 *", submitBtn: "설문 제출", ph_masseur: "번호 입력", ph_name: "성함", ph_phone: "전화번호", ph_suggest: "의견 입력...", suc: "✅ 제출 성공！", err: "❌ 실패", authReady: "연결 완료",
             modalTitle: "감사합니다!", modalSub: "Success Received", 
             modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", 
             modalTextNegative: "보내주신 의견 감사합니다.<br>더 나은 서비스를 위해 노력하겠습니다.", 
-            modalGoGoogle: "지금 리뷰하기", modalClose: "다음에 하기", modalCloseNegative: "닫기"
+            modalGoGoogle: "리뷰하기", modalClose: "닫기", modalCloseNegative: "닫기"
         }
     };
 
@@ -251,32 +253,25 @@
         document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
         const activeBtn = document.getElementById(`btn-${lang}`); if(activeBtn) activeBtn.classList.add('active');
         const trans = translations[lang] || translations['zh'];
-        
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             if (trans[key]) {
                 el.innerHTML = trans[key];
                 const radioInput = el.previousElementSibling;
-                if (radioInput && radioInput.type === 'radio') {
-                    radioInput.value = trans[key]; 
-                }
+                if (radioInput && radioInput.type === 'radio') radioInput.value = trans[key]; 
             }
         });
-        
         document.querySelectorAll('[data-ph]').forEach(el => {
             const key = el.getAttribute('data-ph');
             if (trans[key]) el.placeholder = trans[key];
         });
-
-        const info = document.getElementById('conn-info'); if(isAuthorized && info) info.innerText = trans.authReady;
     };
 
     onAuthStateChanged(auth, (user) => {
         if(user) {
             isAuthorized = true;
             const btn = document.getElementById('submitBtn'); if(btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
-            const activeLangBtn = document.querySelector('.lang-btn.active');
-            window.changeLang(activeLangBtn ? activeLangBtn.id.split('-')[1] : 'zh');
+            window.changeLang('zh');
         }
     });
 
@@ -296,22 +291,20 @@
         const btn = document.getElementById('submitBtn');
         const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
         const t = translations[lang];
-        
         btn.disabled = true; btn.innerText = "...Processing...";
         
-        let hasNegativeRating = false;
         const ratings = {};
+        let hasNegativeRating = false;
         for(let i=1; i<=10; i++) {
             const radioGroup = document.getElementsByName(`q${i}`);
-            if (radioGroup[2].checked) {
-                hasNegativeRating = true;
-            }
             const c = document.querySelector(`input[name="q${i}"]:checked`);
             ratings[`q${i}`] = c ? c.value : null;
+            if (radioGroup[2].checked) hasNegativeRating = true;
         }
 
         const suggestionText = document.getElementById('suggestions').value.trim();
-        const shouldHideMarketing = hasNegativeRating || suggestionText.length > 0;
+        const isTextNegative = await checkIsNegativeSentiment(suggestionText);
+        const shouldHideMarketing = hasNegativeRating || isTextNegative;
 
         const surveyData = { 
             branch: t.branchName, 
@@ -324,14 +317,13 @@
             submittedLang: lang, 
             createdAt: serverTimestamp(), 
             marketingAction: 'Pending',
-            isFilteredNegative: shouldHideMarketing 
+            isFilteredNegative: shouldHideMarketing
         };
 
         try {
             const docRef = await addDoc(collection(db, 'apps', 'zhongqing-v1', 'surveys'), surveyData);
             lastDocId = docRef.id;
             
-            // --- 動態調整彈窗內容 ---
             const googleBtn = document.getElementById('googleReviewBtn');
             const modalTextEl = document.getElementById('modalText');
             const modalCloseBtn = document.getElementById('modalCloseBtn');
@@ -351,25 +343,13 @@
             document.getElementById('successModal').classList.replace('modal-hide', 'modal-show');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch(err) { 
-            showToast(`${t.err} (${err.code})`, "bg-red-600"); 
+            console.error(err);
         } finally { 
             btn.disabled = false; btn.innerText = t.submitBtn; 
         }
     });
 
-    function showToast(msg, color) {
-        const t = document.getElementById('toast'); if(!t) return;
-        t.innerText = msg;
-        t.className = `fixed bottom-10 left-1/2 -translate-x-1/2 ${color} text-white px-8 py-4 rounded-full shadow-2xl transition-all z-50 text-sm font-bold min-w-[280px] opacity-100 text-center`;
-        setTimeout(() => t.className = t.className.replace('opacity-100', 'opacity-0'), 5000);
-    }
-    
-    window.onload = () => { 
-        renderQuestions(); 
-        applyTimeConstraints(); 
-        window.changeLang('zh'); 
-        signInAnonymously(auth); 
-    };
+    window.onload = () => { renderQuestions(); applyTimeConstraints(); signInAnonymously(auth); };
 </script>
 </body>
 </html>
