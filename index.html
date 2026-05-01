@@ -2,426 +2,523 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>服務意見調查表</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>稽核監控中心 - 中清行館 V1.8.9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Noto Sans TC', sans-serif; overflow-x: hidden; }
         
-        /* 語系切換按鈕效果 */
-        .lang-btn { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background-color: white; color: #4b5563; border: 1px solid #e5e7eb; }
-        .lang-btn.active { 
-            background-color: #2563eb !important; 
-            color: white !important; 
-            border-color: #1e40af !important; 
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-            transform: translateY(-1px);
+        .modal-active { display: flex !important; opacity: 1; pointer-events: auto; }
+        .modal-inactive { display: none !important; opacity: 0; pointer-events: none; }
+        
+        .compact-table th, .compact-table td { 
+            padding: 0.25rem 0.15rem !important; 
+            border: 1px solid #f1f5f9; 
+            vertical-align: middle; 
+            line-height: 1.1;
+        }
+        
+        .q-col { 
+            min-width: 40px; 
+            max-width: 52px;
+            text-align: center; 
+            font-weight: 800; 
+            font-size: 8px; 
+            letter-spacing: -0.6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        @keyframes pulse-red-alert { 
+            0% { background-color: #ef4444; transform: scale(1); } 
+            50% { background-color: #dc2626; transform: scale(1.01); } 
+            100% { background-color: #ef4444; transform: scale(1); } 
+        }
+        .alarm-banner { 
+            animation: pulse-red-alert 1.5s infinite ease-in-out; 
+            box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.4); 
+            border: 2px solid white;
         }
 
-        /* 表單元素美化 */
-        input[type="radio"]:checked + span { color: #2563eb; font-weight: 700; }
-        .question-card { border-radius: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        input:focus, textarea:focus { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); background-color: white !important; border-color: #2563eb !important; }
-        #submitBtn:disabled { background-color: #94a3b8; cursor: not-allowed; opacity: 0.5; }
-        
-        /* 移除編號上下箭頭 */
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
+        .custom-scroll::-webkit-scrollbar { height: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
-        /* 成功彈窗 */
-        #successModal { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        .modal-show { opacity: 1; pointer-events: auto; transform: scale(1); }
-        .modal-hide { opacity: 0; pointer-events: none; transform: scale(0.95); }
-        
-        @keyframes pulse-gold { 
-            0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); } 
-            70% { box-shadow: 0 0 0 15px rgba(251, 191, 36, 0); } 
-            100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); } 
+        .toast-entry { transition: all 0.5s ease-in-out; }
+        .toast-fade { opacity: 0; transform: translateX(20px); }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; }
+            .print-compact { border-radius: 0 !important; box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+            @page { size: A2 landscape; margin: 0.3cm; }
         }
-        .btn-active-highlight { animation: pulse-gold 2s infinite; background-color: #fbbf24; color: #1e293b; }
-        .btn-dimmed { background-color: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
-        .status-ready { color: #10b981 !important; font-weight: 900; }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen pb-12">
+<body class="bg-slate-50 min-h-screen p-1 md:p-1.5">
 
-<div id="app" class="max-w-md mx-auto">
-    <header class="bg-white sticky top-0 z-20 shadow-sm px-4 py-4 mb-4 text-center">
-        <h1 class="text-xl font-bold text-gray-800" data-i18n="title">服務意見調查表</h1>
-        <p id="conn-info" class="text-[8px] text-gray-400 font-mono tracking-widest uppercase italic">Establishing Secure Connection...</p>
-        <div class="flex justify-between gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200 mt-4">
-            <button onclick="window.changeLang('zh')" id="btn-zh" class="lang-btn active flex-1 py-2.5 rounded-xl text-xs font-bold">中文</button>
-            <button onclick="window.changeLang('en')" id="btn-en" class="lang-btn flex-1 py-2.5 rounded-xl text-xs font-bold">EN</button>
-            <button onclick="window.changeLang('ja')" id="btn-ja" class="lang-btn flex-1 py-2.5 rounded-xl text-xs font-bold">日本語</button>
-            <button onclick="window.changeLang('ko')" id="btn-ko" class="lang-btn flex-1 py-2.5 rounded-xl text-xs font-bold">한국어</button>
+<div id="toastContainer" class="fixed bottom-4 right-4 z-[10005] flex flex-col gap-2 pointer-events-none no-print"></div>
+
+<div id="alarmContainer" class="fixed top-2 left-1/2 -translate-x-1/2 z-[10008] w-full max-w-xl pointer-events-none no-print"></div>
+
+<div id="adminApp" class="max-w-[2400px] mx-auto print-compact">
+    <!-- 登入遮罩 -->
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-[10010] no-print transition-all duration-500">
+        <div class="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center border-t-8 border-blue-600">
+            <h2 class="text-xl font-black mb-1 text-slate-800 italic uppercase tracking-tighter">管理主控台</h2>
+            <p class="text-[9px] text-slate-400 mb-6 font-bold uppercase">中清行館監控站 V1.8.9</p>
+            <div class="relative mb-4">
+                <input type="password" id="loginInput" placeholder="輸入管理密碼" class="w-full p-3 border-2 rounded-xl text-center text-lg font-bold outline-none focus:border-blue-500 shadow-inner">
+            </div>
+            <button onclick="handleLogin()" id="loginBtn" class="w-full bg-blue-600 text-white font-black py-3 rounded-xl active:scale-95 transition hover:bg-blue-700 shadow-lg mb-2 cursor-pointer">進入監控系統</button>
+            <p id="loginStatus" class="text-[9px] text-slate-400 font-mono uppercase tracking-widest italic">System Ready</p>
+        </div>
+    </div>
+
+    <header class="flex justify-between items-end mb-1.5 px-1 no-print">
+        <div>
+            <h1 class="text-lg font-black text-slate-900 uppercase leading-none">服務稽核報表 <span id="connTag" class="text-[8px] bg-slate-200 px-1 py-0.5 rounded ml-1 font-mono italic text-slate-400">OFFLINE</span></h1>
+            <p class="text-slate-400 text-[8px] font-bold italic">V1.8.9 Database Path Reverted</p>
+        </div>
+        <div class="flex gap-1.5 items-center">
+            <button onclick="openLogHistory()" class="bg-slate-800 text-green-400 border border-green-900/30 px-2.5 py-0.5 rounded-lg font-black shadow-sm text-[10px] hover:bg-black transition cursor-pointer flex items-center gap-1">
+                <span class="text-[8px] animate-pulse">●</span> 查看日誌 HISTORY
+            </button>
+            <div id="lineStatusTag" class="bg-blue-50 text-blue-600 text-[8px] px-2 py-0.5 rounded border border-blue-200 font-black italic">LINE: STANDBY</div>
+            <button onclick="exportReport()" class="bg-white border px-2.5 py-0.5 rounded-lg font-black shadow-sm text-[10px] hover:bg-slate-50 transition cursor-pointer">匯出報表</button>
+            <button onclick="signOutAdmin()" class="bg-slate-100 px-2 py-0.5 rounded-lg font-bold text-slate-400 text-[9px] hover:text-red-400 cursor-pointer">登出</button>
         </div>
     </header>
 
-    <main class="px-4 space-y-4">
-        <form id="surveyForm" class="space-y-4">
-            <div class="bg-white p-5 rounded-3xl border border-blue-100 shadow-sm">
-                <label class="block text-[10px] font-bold text-blue-400 mb-1 uppercase tracking-tighter" data-i18n="branchLabel">服務分店</label>
-                <div class="flex items-center text-gray-800 font-bold text-lg italic">📍 <span data-i18n="branchName">中清行館</span></div>
+    <section class="bg-white p-1.5 rounded-xl shadow-sm border mb-1.5 no-print grid grid-cols-2 md:grid-cols-5 gap-1.5 items-end">
+        <div><label class="block text-[8px] font-bold text-slate-400 mb-0.5 uppercase">開始日期</label><input type="date" id="filterStart" onchange="filterData()" class="w-full px-1.5 py-0.5 bg-slate-50 border rounded text-[10px] font-bold"></div>
+        <div><label class="block text-[8px] font-bold text-slate-400 mb-0.5 uppercase">結束日期</label><input type="date" id="filterEnd" onchange="filterData()" class="w-full px-1.5 py-0.5 bg-slate-50 border rounded text-[10px] font-bold"></div>
+        <div><label class="block text-[8px] font-bold text-slate-400 mb-0.5 uppercase">篩選師傅</label><select id="filterMasseur" onchange="filterData()" class="w-full px-1.5 py-0.5 bg-slate-50 border rounded text-[10px] font-bold"><option value="all">所有師傅</option></select></div>
+        <div><label class="block text-[8px] font-bold text-slate-400 mb-0.5 uppercase">稽核狀態分類</label><select id="filterStatus" onchange="filterData()" class="w-full px-1.5 py-0.5 bg-blue-50 border border-blue-100 rounded text-[10px] font-black text-blue-700">
+            <option value="all">所有數據 (ALL)</option>
+            <option value="normal">正常數據 (NORMAL)</option>
+            <option value="critical">異常待處置 (PENDING)</option>
+            <option value="resolved">處理完成 (RESOLVED)</option>
+        </select></div>
+        <button onclick="resetFilters()" class="bg-slate-800 text-white font-black py-1 rounded text-[10px] hover:bg-slate-700 cursor-pointer">重置篩選</button>
+    </section>
+
+    <div class="flex gap-1.5 mb-1.5 no-print">
+        <div class="bg-white px-3 py-1 rounded-xl shadow-sm border flex flex-col justify-center min-w-[120px]">
+            <p class="text-slate-400 text-[8px] font-bold uppercase leading-none mb-1">本期總量 (<span id="totalDateDisplay" class="text-blue-500">-</span>)</p>
+            <div class="flex items-center gap-2">
+                <h3 id="statTotal" class="text-lg font-black italic text-blue-600 leading-none">0</h3>
+                <div id="loadingSpin" class="animate-spin text-blue-600 text-[8px]">⌛</div>
             </div>
+        </div>
+        <div id="alarmCountBox" class="bg-white px-3 py-1 rounded-xl shadow-sm border-2 border-red-50 flex flex-col justify-center min-w-[80px]">
+            <p class="text-slate-400 text-[8px] font-bold uppercase leading-none mb-1 text-red-400">異常待處置</p>
+            <h3 id="activeAlarmNum" class="text-lg font-black italic text-red-500 leading-none">0</h3>
+        </div>
+        <div class="bg-white px-3 py-1 rounded-xl shadow-sm border flex-1 flex flex-col justify-center overflow-hidden">
+            <p class="text-slate-400 text-[8px] font-bold uppercase leading-none mb-1">表現統計 (★ / 📝)</p>
+            <div id="masseurStatsList" class="flex gap-1.5 overflow-x-auto custom-scroll pb-0.5 items-center"></div>
+        </div>
+    </div>
 
-            <!-- 動態生成題目 -->
-            <div id="questionsContainer" class="space-y-4"></div>
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[1550px] compact-table">
+                <thead>
+                    <tr class="text-[7.5px] font-black text-slate-400 uppercase border-b bg-slate-50/50">
+                        <th class="w-6 text-center">序</th>
+                        <th class="w-16">系統/服務時間</th>
+                        <th class="w-10 text-center">師傅</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q1 介紹</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q2 力道</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q3 異味</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q4 時間</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q5 禮貌</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q6 觸碰</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q7 禁動</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q8 打卡</th>
+                        <th class="q-col text-green-700 bg-green-50/20">Q9 名片</th>
+                        <th class="q-col text-red-700 bg-red-50/20">Q10 老點</th>
+                        <th class="w-14 text-center">行銷反饋</th>
+                        <th class="w-10 text-center">狀態</th>
+                        <th class="min-w-[120px]">管理備註</th>
+                        <th class="w-10 no-print text-center">操作</th>
+                        <th class="w-20">顧客資訊</th>
+                    </tr>
+                </thead>
+                <tbody id="reportTableBody" class="text-[8.5px] divide-y"></tbody>
+            </table>
+        </div>
+    </div>
 
-            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
-                <div>
-                    <label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="masseurIdLabel">師傅號碼 *</label>
-                    <input type="number" id="masseurId" required data-ph="ph_masseur" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xl font-bold outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="dateLabel">服務日期 *</label>
-                    <input type="date" id="serviceDate" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-base outline-none cursor-pointer" onkeydown="return false">
-                </div>
-                <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="custNameLabel">貴賓姓名</label><input type="text" id="custName" data-ph="ph_name" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></div>
-                <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="phoneLabel">聯絡電話</label><input type="tel" id="custPhone" data-ph="ph_phone" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></div>
-                <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="suggestLabel">建議內容詳述</label><textarea id="suggestions" rows="3" data-ph="ph_suggest" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></textarea></div>
+    <div id="detailModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm modal-inactive z-[10015] items-center justify-center p-4 transition-all duration-300 no-print">
+        <div class="bg-white w-full max-w-xl rounded-[2rem] shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-5 border-b flex justify-between items-center bg-white">
+                <h3 class="text-lg font-black italic text-slate-800"><span id="modalId" class="bg-blue-600 text-white px-2 py-0.5 rounded text-xs mr-2 not-italic">00</span>數據管理</h3>
+                <button onclick="closeModal('detailModal')" class="w-8 h-8 bg-slate-100 rounded-full font-bold hover:bg-slate-200 cursor-pointer">✕</button>
             </div>
-
-            <button type="submit" id="submitBtn" disabled class="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-lg active:scale-95 transition-all text-lg opacity-50"><span data-i18n="submitBtn">提交問卷 Submit</span></button>
-        </form>
-    </main>
-
-    <!-- 成功行銷引導 Modal -->
-    <div id="successModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md modal-hide">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl text-center border-b-8 border-amber-400">
-            <div class="bg-blue-600 py-10 text-white">
-                <div class="mb-4 flex justify-center">
-                    <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center p-1 shadow-lg overflow-hidden">
-                        <img 
-                            src="./不老松logo.png" 
-                            alt="Logo" 
-                            class="w-full h-full object-contain"
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                        >
-                        <svg class="w-12 h-12 text-blue-600 hidden" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/>
-                        </svg>
-                    </div>
-                </div>
-                <h3 class="text-2xl font-black italic" data-i18n="modalTitle">感謝您的回饋！</h3>
-                <p class="text-xs opacity-80 mt-2 font-bold uppercase tracking-widest" data-i18n="modalSub">Feedback Successfully Received</p>
-            </div>
-            <div class="p-8 space-y-6">
-                <p id="modalText" class="text-gray-600 font-bold text-sm leading-relaxed" data-i18n="modalText">您的支持是我們進步的動力。<br>邀請您留下 5 星好評！</p>
-                <div class="space-y-3">
-                    <button id="googleReviewBtn" onclick="handleMarketingAction('Reviewed')" class="btn-active-highlight block w-full font-black py-4 rounded-2xl shadow-lg transition-all text-lg flex items-center justify-center gap-2">
-                        <span>⭐</span> <span data-i18n="modalGoGoogle">馬上評論</span>
-                    </button>
-                    <button id="modalCloseBtn" onclick="handleMarketingAction('Dismissed')" class="btn-dimmed block w-full font-bold py-3 rounded-2xl transition-all text-sm" data-i18n="modalClose">下次再評</button>
+            <div id="modalContent" class="p-5 space-y-2.5 overflow-y-auto flex-1"></div>
+            <div class="p-5 bg-slate-50 border-t space-y-2.5">
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">管理者處置說明</p>
+                <textarea id="adminRemarkInput" rows="2" placeholder="請填寫處理情況..." class="w-full p-3 border rounded-xl text-sm outline-none bg-white focus:border-blue-500"></textarea>
+                <div class="flex gap-2">
+                    <button id="resolveBtn" class="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl shadow-md active:scale-95 transition hover:bg-blue-700 cursor-pointer">標記處理完成</button>
+                    <button onclick="closeModal('detailModal')" class="px-4 bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer hover:bg-slate-300">取消</button>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-8 py-4 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none z-50 text-sm font-bold min-w-[280px] text-center"></div>
+
+    <!-- 日誌歷史記錄 -->
+    <div id="logHistoryModal" class="fixed inset-0 bg-black/90 backdrop-blur-sm modal-inactive z-[10020] items-center justify-center p-4 transition-all duration-300 no-print">
+        <div class="bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-800 overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                <h3 class="text-lg font-black italic text-green-400 uppercase tracking-tighter">Connection History Log</h3>
+                <button onclick="closeModal('logHistoryModal')" class="w-8 h-8 bg-slate-800 text-slate-400 rounded-full font-bold hover:bg-slate-700 cursor-pointer">✕</button>
+            </div>
+            <div id="historyLogList" class="p-5 space-y-2 overflow-y-auto flex-1 font-mono text-[10px] text-green-500/80 leading-relaxed custom-scroll"></div>
+        </div>
+    </div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserLocalPersistence, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+    // --- Firebase 配置與正常路徑 ---
     const firebaseConfig = {
         apiKey: "AIzaSyCuytMbR0wfPk0vChxqI66Zci0uJtGiizE",
         authDomain: "survey-c3aa5.firebaseapp.com",
         projectId: "survey-c3aa5",
         storageBucket: "survey-c3aa5.firebasestorage.app",
         messagingSenderId: "874594469122",
-        appId: "1:874594469122:web:2b2c1208b20d2095b9ae1b",
-        measurementId: "G-B5T1318ZR4"
+        appId: "1:874594469122:web:2b2c1208b20d2095b9ae1b"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    let isAuthorized = false;
-    let lastDocId = null;
-
-    // --- Gemini API 語義分析配置 ---
-    const apiKey = ""; // API Key 會由環境自動注入
-    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
-
-    /**
-     * 使用 Gemini 分析建議內容是否為負面投訴
-     * @param {string} text 建議內容
-     * @returns {Promise<boolean>} 是否判定為負面
-     */
-    async function checkIsNegativeSentiment(text) {
-        if (!text || text.trim().length === 0) return false;
-
-        const prompt = `你是一個專業的客戶服務分析師。請分析以下這段客戶留下的建議文字是「正向讚美」還是「負向投訴」。
-        如果是正向讚美或無關痛癢的建議，請回傳 "POSITIVE"。
-        如果是表達不滿、生氣、批評、抱怨或負面反饋，請回傳 "NEGATIVE"。
-        只需回傳一個單字。
-        文字內容：${text}`;
-
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }]
-        };
-
-        const fetchWithRetry = async (retries = 5, delay = 1000) => {
-            try {
-                const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                const sentiment = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
-                return sentiment === "NEGATIVE";
-            } catch (err) {
-                if (retries > 0) {
-                    await new Promise(res => setTimeout(res, delay));
-                    return fetchWithRetry(retries - 1, delay * 2);
-                }
-                // API 失敗時，安全機制起見，若有文字則視為負向
-                return true; 
-            }
-        };
-
-        return await fetchWithRetry();
-    }
-
-    const translations = {
-        zh: { 
-            title: "服務意見調查表", branchLabel: "服務分店", branchName: "中清行館", dateLabel: "服務日期 *", 
-            q1: "服務開始有介紹號碼詢問消費項目嗎？", q1_a1: "主動介紹詢問", q1_a2: "後來才問", q1_a3: "完全沒問", 
-            q2: "服務過程有主動詢問調整力道大小嗎？", q2_a1: "主動詢問調整", q2_a2: "被動回應", q2_a3: "完全不問", 
-            q3: "師傅身上有異味或煙味讓您不舒服嗎？", q3_a1: "沒有異味", q3_a2: "稍微有點", q3_a3: "味道很重", 
-            q4: "服務流程時間掌握得當嗎？", q4_a1: "服務很好", q4_a2: "普通尚可", q4_a3: "感覺很差", 
-            q5: "服務過程師傅有言語輕佻或不禮貌嗎？", q5_a1: "良好有禮", q5_a2: "普通尚可", q5_a3: "言語不當", 
-            q6: "包廂按摩服務有肢體觸碰讓你尷尬嗎？", q6_a1: "專業得體", q6_a2: "有點尷尬", q6_a3: "感覺很差", 
-            q7: "包廂有開椎甩頭踩背等禁止危險動作？", q7_a1: "完全沒有", q7_a2: "有點危險", q7_a3: "非常危險", 
-            q8: "師傅有邀請打卡按讚介紹優惠活動嗎？", q8_a1: "熱情主動", q8_a2: "非常被動", q8_a3: "完全沒說", 
-            q9: "師傅服務結束送客有主動給您名片嗎？", q9_a1: "熱情主動", q9_a2: "要了才給", q9_a3: "沒有給名片", 
-            q10: "今天服務的師傅會讓您下次再老點他嗎？", q10_a1: "一定老點", q10_a2: "再試試看", q10_a3: "絕對不會", 
-            masseurIdLabel: "師傅號碼 *", submitBtn: "提交問卷 Submit", ph_masseur: "輸入編號", ph_name: "輸入姓名", ph_phone: "輸入電話", ph_suggest: "您的建議...", suc: "✅ 提交成功！", err: "❌ 寫入失敗", authReady: "Secure Cloud Ready",
-            modalTitle: "感謝您的回饋！", modalSub: "Success Received", 
-            modalText: "您的支持是我們進步的動力。<br>邀請您留下 5 星好評！", 
-            modalTextNegative: "我們已收到您的回饋，<br>這將作為我們改進的重要參考。", 
-            modalGoGoogle: "馬上評論", modalClose: "下次再評", modalCloseNegative: "關閉視窗"
-        },
-        en: { 
-            title: "Service Survey", branchLabel: "Branch", branchName: "Zhongqing Branch", dateLabel: "Date *", 
-            q1: "ID introduction at start?", q1_a1: "Proactive", q1_a2: "Later", q1_a3: "No", 
-            q2: "Pressure adjust check?", q2_a1: "Proactive", q2_a2: "Passive", q2_a3: "No",
-            q3: "Unpleasant odor?", q3_a1: "No odor", q3_a2: "A little", q3_a3: "Strong",
-            q4: "Service timing?", q4_a1: "Excellent", q4_a2: "Average", q4_a3: "Poor",
-            q5: "Politeness?", q5_a1: "Polite", q5_a2: "Average", q5_a3: "Impolite",
-            q6: "Awkward touch?", q6_a1: "Professional", q6_a2: "Awkward", q6_a3: "Poor",
-            q7: "Dangerous moves?", q7_a1: "None", q7_a2: "Risky", q7_a3: "Dangerous",
-            q8: "Promotion intro?", q8_a1: "Proactive", q8_a2: "Passive", q8_a3: "None",
-            q9: "Business card offered?", q9_a1: "Proactive", q9_a2: "Requested", q9_a3: "No",
-            q10: "Would you re-book?", q10_a1: "Definitely", q10_a2: "Maybe", q10_a3: "Never", 
-            masseurIdLabel: "Masseur ID *", submitBtn: "Submit Survey", ph_masseur: "ID No.", ph_name: "Name", ph_phone: "Phone", ph_suggest: "Feedback...", suc: "✅ Submitted!", err: "❌ Failed", authReady: "Secure Cloud Ready",
-            modalTitle: "Thank You!", modalSub: "Success Received", 
-            modalText: "We value your feedback.<br>Please leave a 5-star review!", 
-            modalTextNegative: "Your feedback has been received.<br>It will help us improve our service.", 
-            modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
-        },
-        ja: { 
-            title: "サービスアンケート", branchLabel: "店舗", branchName: "中清店", dateLabel: "日付 *", 
-            q1: "番号紹介はありましたか？", q1_a1: "積極的", q1_a2: "後で", q1_a3: "なし", 
-            q2: "力加減の確認は？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "なし",
-            q3: "臭いは気になりましたか？", q3_a1: "なし", q3_a2: "少し", q3_a3: "非常に",
-            q4: "時間配分は適切？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "悪い",
-            q5: "マナーが不適切？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失禮",
-            q6: "不快な身體接觸は？", q6_a1: "適切", q6_a2: "気まずい", q6_a3: "不快",
-            q7: "危険な動作は？", q7_a1: "なかった", q7_a2: "少し危ない", q7_a3: "非常に危險",
-            q8: "キャンペーン案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なかった",
-            q9: "名刺の提供は？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なかった",
-            q10: "次回も指名？", q10_a1: "必ず指名", q10_a2: "また試す", q10_a3: "しない", 
-            masseurIdLabel: "スタッフ番号 *", submitBtn: "送信する", ph_masseur: "番号", ph_name: "名前", ph_phone: "電話", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
-            modalTitle: "ありがとうございます！", modalSub: "Success Received", 
-            modalText: "満足いただけましたら、5つ星をお願いします！", 
-            modalTextNegative: "貴重なご意見ありがとうございます。<br>改善の参考にさせていただきます。", 
-            modalGoGoogle: "今すぐ評価", modalClose: "次回にする", modalCloseNegative: "閉じる"
-        },
-        ko: { 
-            title: "서비스 만족도 조사", branchLabel: "지점", branchName: "중청점", dateLabel: "날짜 *", 
-            q1: "번호 안내가 있었습니까？", q1_a1: "적극 안내", q1_a2: "나중에", q1_a3: "없음", 
-            q2: "압력 조節 확인은？", q2_a1: "적극 확인", q2_a2: "수동적", q2_a3: "없음",
-            q3: "체취가 불편했습니까？", q3_a1: "없음", q3_a2: "약간", q3_a3: "심함",
-            q4: "시간 관리는？", q4_a1: "만족", q4_a2: "보통", q4_a3: "불만",
-            q5: "매너가 무례했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
-            q6: "불편한 신체 접촉은？", q6_a1: "전문적", q6_a2: "당황함", q6_a3: "불쾌함",
-            q7: "위험한 동작은？", q7_a1: "없음", q7_a2: "위험", q7_a3: "매우 위험",
-            q8: "이벤트 안내는？", q8_a1: "적극적", q8_a2: "수動적", q8_a3: "없음",
-            q9: "명함 제공은？", q9_a1: "적극적", q9_a2: "요청 시", q9_a3: "없음",
-            q10: "또 지명하시겠습니까？", q10_a1: "꼭 지명", q10_a2: "다시 시도", q10_a3: "안 함", 
-            masseurIdLabel: "관리사 번호 *", submitBtn: "설문 제출", ph_masseur: "번호", ph_name: "성함", ph_phone: "전화", ph_suggest: "의견...", suc: "✅ 제출되었습니다！", err: "❌ 실패", authReady: "연결 완료",
-            modalTitle: "감사합니다!", modalSub: "Success Received", 
-            modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", 
-            modalTextNegative: "보내주신 의견 감사합니다.<br>더 나은 서비스를 위해 노력하겠습니다.", 
-            modalGoGoogle: "지금 리뷰하기", modalClose: "다음에 하기", modalCloseNegative: "닫기"
-        }
-    };
-
-    function applyTimeConstraints() {
-        const dateInput = document.getElementById('serviceDate'); if(!dateInput) return;
-        const now = new Date(); const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        const toISO = (d) => d.toISOString().split('T')[0];
-        dateInput.max = toISO(now); dateInput.min = toISO(yesterday); dateInput.value = toISO(now);
-    }
-
-    function renderQuestions() {
-        const container = document.getElementById('questionsContainer'); if(!container) return;
-        container.innerHTML = '';
-        for(let i=1; i<=10; i++) {
-            container.innerHTML += `
-            <div class="bg-white p-6 question-card shadow-sm border border-gray-100">
-                <p class="font-bold text-gray-800 mb-4 text-base leading-snug">
-                    ${i}. <span data-i18n="q${i}">...</span>
-                </p>
-                <div class="space-y-3">
-                    ${[1,2,3].map(a => `
-                        <label class="flex items-center p-4 border rounded-2xl border-gray-100 bg-gray-50/50 active:bg-blue-50 transition cursor-pointer">
-                            <input type="radio" name="q${i}" value="" class="w-5 h-5 mr-3" required> 
-                            <span data-i18n="q${i}_a${a}">...</span>
-                        </label>`).join('')}
-                </div>
-            </div>`;
-        }
-    }
-
-    window.changeLang = function(lang) {
-        document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-        const activeBtn = document.getElementById(`btn-${lang}`); if(activeBtn) activeBtn.classList.add('active');
-        const trans = translations[lang] || translations['zh'];
-        
-        document.querySelectorAll('[data-i18n]').forEach(el => {
-            const key = el.getAttribute('data-i18n');
-            if (trans[key]) {
-                el.innerHTML = trans[key];
-                const radioInput = el.previousElementSibling;
-                if (radioInput && radioInput.type === 'radio') {
-                    radioInput.value = trans[key]; 
-                }
-            }
-        });
-        
-        document.querySelectorAll('[data-ph]').forEach(el => {
-            const key = el.getAttribute('data-ph');
-            if (trans[key]) el.placeholder = trans[key];
-        });
-
-        const info = document.getElementById('conn-info'); if(isAuthorized && info) info.innerText = trans.authReady;
-    };
-
-    onAuthStateChanged(auth, (user) => {
-        if(user) {
-            isAuthorized = true;
-            const btn = document.getElementById('submitBtn'); if(btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
-            const activeLangBtn = document.querySelector('.lang-btn.active');
-            window.changeLang(activeLangBtn ? activeLangBtn.id.split('-')[1] : 'zh');
-        }
-    });
-
-    window.handleMarketingAction = async (action) => {
-        if (!lastDocId) return;
-        try {
-            const docRef = doc(db, 'apps', 'zhongqing-v1', 'surveys', lastDocId);
-            await updateDoc(docRef, { marketingAction: action });
-            if (action === 'Reviewed') window.open("https://maps.app.goo.gl/1Rto7b5TRNNF35yf8", "_blank");
-            document.getElementById('successModal').classList.replace('modal-show', 'modal-hide');
-        } catch (e) { console.error("Update Action Fail"); }
-    };
-
-    document.getElementById('surveyForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if(!isAuthorized || !auth.currentUser) return;
-        const btn = document.getElementById('submitBtn');
-        const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
-        const t = translations[lang];
-        
-        btn.disabled = true; btn.innerText = "...Processing...";
-        
-        // 1. 偵測選項差評
-        let hasNegativeRating = false;
-        const ratings = {};
-        for(let i=1; i<=10; i++) {
-            const radioGroup = document.getElementsByName(`q${i}`);
-            if (radioGroup[2].checked) {
-                hasNegativeRating = true;
-            }
-            const c = document.querySelector(`input[name="q${i}"]:checked`);
-            ratings[`q${i}`] = c ? c.value : null;
-        }
-
-        const suggestionText = document.getElementById('suggestions').value.trim();
-
-        // 2. 進行智慧情緒分析 (AI)
-        // 只有在目前沒有選項差評的情況下才需要判斷文字內容決定是否「導正」
-        let isTextNegative = false;
-        if (suggestionText.length > 0) {
-            isTextNegative = await checkIsNegativeSentiment(suggestionText);
-        }
-
-        // 最終判讀：若評分有差評 OR 文字被 AI 判定為負面，則隱藏行銷引導
-        const shouldHideMarketing = hasNegativeRating || isTextNegative;
-
-        const surveyData = { 
-            branch: t.branchName, 
-            masseurId: document.getElementById('masseurId').value, 
-            customerName: document.getElementById('custName').value || "Anonymous", 
-            customerPhone: document.getElementById('custPhone').value || "N/A", 
-            serviceDate: document.getElementById('serviceDate').value, 
-            suggestions: suggestionText, 
-            ratings: ratings, 
-            submittedLang: lang, 
-            createdAt: serverTimestamp(), 
-            marketingAction: 'Pending',
-            isFilteredNegative: shouldHideMarketing,
-            aiAnalysis: isTextNegative ? 'NEGATIVE' : 'POSITIVE'
-        };
-
-        try {
-            const docRef = await addDoc(collection(db, 'apps', 'zhongqing-v1', 'surveys'), surveyData);
-            lastDocId = docRef.id;
-            
-            // --- 動態調整彈窗內容 ---
-            const googleBtn = document.getElementById('googleReviewBtn');
-            const modalTextEl = document.getElementById('modalText');
-            const modalCloseBtn = document.getElementById('modalCloseBtn');
-
-            if (shouldHideMarketing) {
-                googleBtn.style.display = 'none'; 
-                modalTextEl.innerHTML = t.modalTextNegative; 
-                modalCloseBtn.innerText = t.modalCloseNegative; 
-            } else {
-                googleBtn.style.display = 'flex'; 
-                modalTextEl.innerHTML = t.modalText; 
-                modalCloseBtn.innerText = t.modalClose; 
-            }
-
-            document.getElementById('surveyForm').reset();
-            applyTimeConstraints();
-            document.getElementById('successModal').classList.replace('modal-hide', 'modal-show');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch(err) { 
-            showToast(`${t.err} (${err.code})`, "bg-red-600"); 
-        } finally { 
-            btn.disabled = false; btn.innerText = t.submitBtn; 
-        }
-    });
-
-    function showToast(msg, color) {
-        const t = document.getElementById('toast'); if(!t) return;
-        t.innerText = msg;
-        t.className = `fixed bottom-10 left-1/2 -translate-x-1/2 ${color} text-white px-8 py-4 rounded-full shadow-2xl transition-all z-50 text-sm font-bold min-w-[280px] opacity-100 text-center`;
-        setTimeout(() => t.className = t.className.replace('opacity-100', 'opacity-0'), 5000);
-    }
     
-    window.onload = () => { 
-        renderQuestions(); 
-        applyTimeConstraints(); 
-        window.changeLang('zh'); 
-        signInAnonymously(auth); 
+    // 修正回您指定的正常路徑結構
+    const collectionPath = ['apps', 'zhongqing-v1', 'surveys'];
+
+    let rawData = [];
+    let syncStarted = false;
+    let revealedIds = new Set();
+    let currentDocId = null;
+    let logArchive = [];
+    let titleAlertInterval = null;
+
+    const negKeywords = ["完全沒問", "完全不問", "味道很重", "感覺很差", "言語不當", "非常危險", "完全沒說", "沒有給名片", "絕對不會"];
+    const labels = { q1: "Q1. 開始介紹", q2: "Q2. 力道調整", q3: "Q3. 異味/煙味", q4: "Q4. 時間掌握", q5: "Q5. 服務禮貌", q6: "Q6. 肢體觸碰", q7: "Q7. 禁止動作", q8: "Q8. 打卡推廣", q9: "Q9. 提供名片", q10: "Q10. 老點意願" };
+
+    const maskName = (n) => !n ? '-' : (n.length<=1 ? n : (n.length===2 ? n[0]+'*' : n[0]+'*'.repeat(n.length-2)+n[n.length-1]));
+    const maskPhone = (p) => !p ? '' : String(p).replace(/\s/g, '').substring(0,3)+'****'+String(p).slice(-3);
+    const padId = (id) => String(id).padStart(2, '0');
+
+    function updateBrowserTabStatus(pendingCount) {
+        if (pendingCount > 0) {
+            if (!titleAlertInterval) {
+                let showAlt = false;
+                titleAlertInterval = setInterval(() => {
+                    document.title = showAlt ? `(⚠️ 待處理: ${pendingCount}) 稽核警告` : `【管理中心】中清行館`;
+                    showAlt = !showAlt;
+                }, 1500);
+            }
+        } else {
+            if (titleAlertInterval) {
+                clearInterval(titleAlertInterval);
+                titleAlertInterval = null;
+            }
+            document.title = "稽核監控中心 - 中清行館 V1.8.9";
+        }
+    }
+
+    function logToUI(msg, colorClass = 'bg-slate-900 text-green-400') {
+        const time = new Date().toLocaleTimeString();
+        const fullMsg = `[${time}] ${msg}`;
+        logArchive.unshift(fullMsg);
+        if (logArchive.length > 50) logArchive.pop();
+        const historyList = document.getElementById('historyLogList');
+        if (historyList) historyList.innerHTML = logArchive.map(log => `<div>${log}</div>`).join('');
+
+        const toastContainer = document.getElementById('toastContainer');
+        if (toastContainer) {
+            const toast = document.createElement('div');
+            toast.className = `toast-entry px-4 py-2 rounded-xl shadow-lg border border-white/10 flex items-center gap-2 text-[10px] font-bold ${colorClass}`;
+            toast.innerHTML = `<span>●</span> ${msg}`;
+            toastContainer.prepend(toast);
+            setTimeout(() => {
+                toast.classList.add('toast-fade');
+                setTimeout(() => toast.remove(), 600);
+            }, 5000);
+        }
+    }
+
+    window.openLogHistory = () => document.getElementById('logHistoryModal').classList.replace('modal-inactive', 'modal-active');
+
+    function setDefaultDateToCurrentMonth() {
+        const now = new Date();
+        const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        document.getElementById('filterStart').value = firstDay;
+        document.getElementById('filterEnd').value = today;
+    }
+
+    window.handleLogin = async () => { 
+        const loginBtn = document.getElementById('loginBtn');
+        if (document.getElementById('loginInput').value === 'admin888') { 
+            try {
+                loginBtn.disabled = true;
+                await setPersistence(auth, browserLocalPersistence);
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else { await signInAnonymously(auth); }
+                sessionStorage.setItem('adminVerified', 'true');
+                hideLoginUI();
+                startSync();
+            } catch (err) { 
+                loginBtn.disabled = false; 
+                logToUI(`Login Error: ${err.message}`, 'bg-red-900 text-white');
+            }
+        } else { alert("密碼錯誤"); }
+    };
+
+    function hideLoginUI() {
+        const overlay = document.getElementById('loginOverlay');
+        if (overlay) {
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        }
+    }
+
+    onAuthStateChanged(auth, (user) => { 
+        if (user && sessionStorage.getItem('adminVerified') === 'true') {
+            document.getElementById('connTag').innerText = "CONNECTED";
+            document.getElementById('connTag').className = "text-[8px] bg-green-500 text-white px-1 py-0.5 rounded font-black italic";
+            hideLoginUI();
+            startSync();
+        }
+    });
+
+    window.signOutAdmin = async () => {
+        sessionStorage.removeItem('adminVerified');
+        await signOut(auth);
+        location.reload();
+    };
+
+    function startSync() {
+        if (!auth.currentUser || sessionStorage.getItem('adminVerified') !== 'true' || syncStarted) return;
+        syncStarted = true;
+        logToUI("Snapshot Listener Active.");
+
+        onSnapshot(collection(db, ...collectionPath), (sn) => {
+            logToUI(`Sync: Found ${sn.size} records.`, 'bg-blue-900 text-white');
+            rawData = sn.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            updateDropdown(); 
+            filterData();
+            const spin = document.getElementById('loadingSpin');
+            if(spin) spin.classList.add('hidden');
+        }, (err) => {
+            syncStarted = false;
+            logToUI(`Sync Error: ${err.code}`, 'bg-red-900 text-white');
+        });
+    }
+
+    window.filterData = () => {
+        const start = document.getElementById('filterStart').value;
+        const end = document.getElementById('filterEnd').value;
+        const mas = document.getElementById('filterMasseur').value;
+        const status = document.getElementById('filterStatus').value;
+
+        // 更新本期總量日期顯示
+        const totalDisp = document.getElementById('totalDateDisplay');
+        if(totalDisp) totalDisp.innerText = start || '開始日期';
+
+        let filtered = rawData.filter(d => {
+            const date = d.serviceDate || (d.createdAt ? new Date(d.createdAt.seconds*1000).toISOString().split('T')[0] : '');
+            const matchTime = (!start || date >= start) && (!end || date <= end);
+            const matchMas = (mas === 'all' || String(d.masseurId) === mas);
+            
+            const isCritical = Object.values(d.ratings || {}).some(v => negKeywords.includes(v));
+            const isRes = d.adminStatus === 'resolved';
+
+            let matchStatus = true;
+            if (status === 'normal') matchStatus = !isCritical;
+            if (status === 'critical') matchStatus = isCritical && !isRes;
+            if (status === 'resolved') matchStatus = isRes;
+
+            return matchTime && matchMas && matchStatus;
+        }).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        updateMasseurStats(filtered);
+        updateAlarmUI(rawData); 
+        renderTable(filtered);
+    };
+
+    function updateMasseurStats(data) {
+        const stats = {};
+        data.forEach(d => {
+            if(!stats[d.masseurId]) stats[d.masseurId] = { s:0, f:0 };
+            if(d.marketingAction==='Reviewed') stats[d.masseurId].s++;
+            if(d.suggestions && d.suggestions.length > 3) stats[d.masseurId].f++;
+        });
+        document.getElementById('masseurStatsList').innerHTML = Object.entries(stats).map(([id, s]) => `
+            <div class="flex items-center gap-1 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full shrink-0">
+                <span class="text-[9px] font-black text-blue-800 italic">#${padId(id)}</span>
+                <span class="text-[10px] font-black text-amber-600">${s.s}★</span>
+                <span class="text-[10px] font-black text-blue-500">${s.f}📝</span>
+            </div>`).join('');
+    }
+
+    function updateAlarmUI(allData) {
+        const pending = allData.filter(d => Object.values(d.ratings || {}).some(v => negKeywords.includes(v)) && d.adminStatus !== 'resolved');
+        const countBox = document.getElementById('activeAlarmNum');
+        if(countBox) countBox.innerText = pending.length;
+        
+        updateBrowserTabStatus(pending.length);
+
+        const container = document.getElementById('alarmContainer');
+        if (pending.length > 0) {
+            const d = pending[0];
+            container.innerHTML = `
+                <div class="m-2 pointer-events-auto">
+                    <div class="alarm-banner text-white px-4 py-1.5 rounded-xl flex justify-between items-center shadow-lg border-2 border-white">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base animate-bounce">⚠️</span>
+                            <div><p class="font-black text-[11px]">師傅 ${padId(d.masseurId)} 稽核異常！</p><p class="text-[8px] opacity-90">${maskName(d.customerName)} | 待處理：${pending.length} 筆</p></div>
+                        </div>
+                        <button onclick="window.showDetail('${d.id}', 'ALRT')" class="bg-white text-red-600 px-2 py-0.5 rounded-lg font-black text-[9px] shadow-sm cursor-pointer hover:bg-slate-100 transition">管理處置</button>
+                    </div>
+                </div>`;
+        } else { container.innerHTML = ''; }
+    }
+
+    function renderTable(data) {
+        const totalBox = document.getElementById('statTotal');
+        if(totalBox) totalBox.innerText = data.length;
+        
+        const body = document.getElementById('reportTableBody');
+        if (data.length === 0) {
+            body.innerHTML = '<tr><td colspan="18" class="py-10 text-center text-slate-400 font-bold italic font-mono uppercase tracking-widest">No matching records found</td></tr>';
+            return;
+        }
+        body.innerHTML = data.map((d, i) => {
+            const r = d.ratings || {};
+            const isCritical = Object.values(r).some(v => negKeywords.includes(v));
+            const isResolved = d.adminStatus === 'resolved';
+            const isRevealed = revealedIds.has(d.id);
+            const ts = d.createdAt ? new Date(d.createdAt.seconds*1000).toLocaleString('zh-TW',{hour12:false,month:'numeric',day:'numeric',hour:'numeric',minute:'numeric'}) : 'Sync';
+            return `<tr>
+                <td class="text-center font-black text-slate-300">${i+1}</td>
+                <td class="font-mono text-[6.5px] text-slate-400">系:${ts}<br>服:${d.serviceDate || '-'}</td>
+                <td class="text-center"><span class="bg-slate-800 text-white px-1 py-0.5 rounded text-[9px] font-black italic">${padId(d.masseurId)}</span></td>
+                ${Object.keys(labels).map(k => {
+                    const v = r[k] || '-';
+                    const color = negKeywords.includes(v) ? 'text-red-700 bg-red-50 font-black' : (v==='-' ? 'text-slate-200' : 'text-slate-600');
+                    return `<td class="q-col ${color}">${v}</td>`;
+                }).join('')}
+                <td class="text-center text-[7px]">${d.marketingAction==='Reviewed'?'<span class="text-amber-500 font-bold">★ 評論</span>':'-'}</td>
+                <td class="text-center"><span class="text-[6.5px] px-1 py-0.5 rounded-full font-black text-white ${isResolved?'bg-blue-600':(isCritical?'bg-red-600 animate-pulse':'bg-green-600')}">${isResolved?'完成':(isCritical?'異常':'正常')}</span></td>
+                <td class="italic text-slate-500 truncate text-[7.5px]">${d.adminRemark || '待處置...'}</td>
+                <td class="no-print text-center"><button onclick="window.showDetail('${d.id}', ${i+1})" class="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-[7.5px] font-black hover:bg-blue-600 hover:text-white cursor-pointer transition">管理</button></td>
+                <!-- 顧客資訊移到最後 -->
+                <td class="p-1">
+                    <div class="flex items-center gap-1">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-slate-700 leading-none truncate">${isRevealed ? d.customerName : maskName(d.customerName)}</p>
+                            <p class="text-[7px] text-slate-400 leading-tight">${isRevealed ? d.customerPhone : maskPhone(d.customerPhone)}</p>
+                        </div>
+                        <button onclick="window.toggleReveal('${d.id}')" class="no-print p-0.5 cursor-pointer">${isRevealed ? '👁️‍🗨️' : '👁️'}</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    window.showDetail = (docId, seq) => {
+        const item = rawData.find(d => String(d.id) === String(docId));
+        if(!item) return;
+        currentDocId = docId;
+        document.getElementById('modalId').innerText = seq;
+        document.getElementById('adminRemarkInput').value = item.adminRemark || "";
+        const r = item.ratings || {};
+        const isRevealed = revealedIds.has(docId);
+        document.getElementById('modalContent').innerHTML = `
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-slate-50 p-3 rounded-xl border"><p class="text-[8px] text-slate-400 font-black mb-0.5">師傅 ID</p><p class="text-xl font-black text-blue-600">${padId(item.masseurId)}</p></div>
+                <div class="bg-slate-50 p-3 rounded-xl border">
+                    <p class="text-[8px] text-slate-400 font-black mb-0.5 uppercase">顧客資訊</p>
+                    <p class="text-lg font-bold">${isRevealed ? item.customerName : maskName(item.customerName)}</p>
+                    <p class="text-[10px] text-slate-400">${isRevealed ? item.customerPhone : maskPhone(item.customerPhone)}</p>
+                </div>
+            </div>
+            <div class="space-y-1 mt-2">${Object.keys(labels).map(k => `
+                <div class="flex justify-between items-center px-3 py-1.5 border rounded-lg ${negKeywords.includes(r[k]) ? 'bg-red-50 border-red-200' : 'bg-white'}">
+                    <span class="text-slate-500 font-bold text-[10px]">${labels[k]}</span>
+                    <span class="font-black text-[10px] ${negKeywords.includes(r[k]) ? 'text-red-600' : 'text-blue-600'}">${r[k] || '-'}</span>
+                </div>`).join('')}</div>
+            <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 mt-2">
+                <p class="text-[8px] font-black text-amber-600 mb-0.5">建議回饋</p>
+                <p class="text-xs text-slate-700 italic">"${item.suggestions || "無填寫建議。"}"</p>
+            </div>`;
+        document.getElementById('detailModal').classList.replace('modal-inactive', 'modal-active');
+    };
+
+    window.closeModal = (id) => document.getElementById(id).classList.replace('modal-active', 'modal-inactive');
+    
+    window.updateDropdown = () => {
+        const ids = [...new Set(rawData.map(d => String(d.masseurId)))].sort((a,b) => parseInt(a)-parseInt(b));
+        document.getElementById('filterMasseur').innerHTML = '<option value="all">所有師傅</option>' + ids.map(id => `<option value="${id}">${padId(id)}</option>`).join('');
+    };
+
+    window.toggleReveal = (id) => {
+        revealedIds.has(id) ? revealedIds.delete(id) : revealedIds.add(id);
+        filterData();
+    };
+
+    document.getElementById('resolveBtn').onclick = async () => {
+        if(!currentDocId) return;
+        try {
+            await updateDoc(doc(db, ...collectionPath, currentDocId), { 
+                adminStatus: 'resolved', 
+                adminRemark: document.getElementById('adminRemarkInput').value || "已處理。", 
+                handledAt: serverTimestamp() 
+            });
+            closeModal('detailModal');
+            logToUI(`Record ${currentDocId} marked as resolved.`, 'bg-green-700 text-white');
+        } catch (e) { 
+            alert("更新失敗"); 
+            logToUI(`Update Error: ${e.message}`, 'bg-red-900 text-white');
+        }
+    };
+
+    window.resetFilters = () => { 
+        setDefaultDateToCurrentMonth();
+        document.getElementById('filterMasseur').value = 'all'; 
+        document.getElementById('filterStatus').value = 'all'; 
+        filterData();
+    };
+
+    window.exportReport = () => window.print();
+
+    window.onload = () => {
+        setDefaultDateToCurrentMonth();
+        const input = document.getElementById('loginInput');
+        if(input) {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin();
+            });
+        }
+        logToUI("System: Logic V1.8.9 Visibility Engine Ready.");
+        
+        if(sessionStorage.getItem('adminVerified') === 'true') {
+            hideLoginUI();
+            startSync();
+        }
     };
 </script>
 </body>
