@@ -69,6 +69,7 @@
                 <div>
                     <label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="dateLabel">服務日期 *</label>
                     <input type="date" id="serviceDate" required class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-base outline-none cursor-pointer" onkeydown="return false">
+                    <p id="dateWarning" class="text-[10px] text-red-500 mt-1 hidden font-bold">⚠️ 僅限選擇今日或昨日之日期</p>
                 </div>
                 <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="custNameLabel">貴賓姓名</label><input type="text" id="custName" data-ph="ph_name" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></div>
                 <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="phoneLabel">聯絡電話</label><input type="tel" id="custPhone" data-ph="ph_phone" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></div>
@@ -110,6 +111,8 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+    // 使用系統規定的 ID
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'zhongqing-v1';
     const firebaseConfig = {
         apiKey: "AIzaSyCuytMbR0wfPk0vChxqI66Zci0uJtGiizE",
         authDomain: "survey-c3aa5.firebaseapp.com",
@@ -127,6 +130,9 @@
 
     const apiKey = ""; // Gemini API Key
     const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+
+    // 核心路徑規範：/artifacts/{appId}/public/data/{collectionName}
+    const SURVEY_COLLECTION = collection(db, 'artifacts', appId, 'public', 'data', 'surveys');
 
     async function checkIsNegativeSentiment(text) {
         if (!text || text.trim().length === 0) return false;
@@ -222,11 +228,44 @@
         }
     };
 
+    /**
+     * iOS 日期鎖定強化邏輯
+     */
     function applyTimeConstraints() {
-        const dateInput = document.getElementById('serviceDate'); if(!dateInput) return;
-        const now = new Date(); const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        const toISO = (d) => d.toISOString().split('T')[0];
-        dateInput.max = toISO(now); dateInput.min = toISO(yesterday); dateInput.value = toISO(now);
+        const dateInput = document.getElementById('serviceDate');
+        if(!dateInput) return;
+
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        
+        const toISO = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const todayStr = toISO(now);
+        const yesterdayStr = toISO(yesterday);
+
+        // 設置 HTML5 原生限制 (Android 主要依賴此項)
+        dateInput.max = todayStr;
+        dateInput.min = yesterdayStr;
+        dateInput.value = todayStr;
+
+        // 針對 iOS Safari 滾輪可越界的修正 (強制攔截)
+        dateInput.addEventListener('change', (e) => {
+            const selectedDate = e.target.value;
+            if (selectedDate !== todayStr && selectedDate !== yesterdayStr) {
+                // 如果不符合今日或昨日，強制跳回今日
+                e.target.value = todayStr;
+                const warning = document.getElementById('dateWarning');
+                if (warning) {
+                    warning.classList.remove('hidden');
+                    setTimeout(() => warning.classList.add('hidden'), 3000);
+                }
+            }
+        });
     }
 
     function renderQuestions() {
@@ -276,21 +315,33 @@
     });
 
     window.handleMarketingAction = async (action) => {
-        if (!lastDocId) return;
+        if (!lastDocId || !auth.currentUser) return;
         try {
-            const docRef = doc(db, 'apps', 'zhongqing-v1', 'surveys', lastDocId);
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'surveys', lastDocId);
             await updateDoc(docRef, { marketingAction: action });
             if (action === 'Reviewed') window.open("https://maps.app.goo.gl/1Rto7b5TRNNF35yf8", "_blank");
             document.getElementById('successModal').classList.replace('modal-show', 'modal-hide');
-        } catch (e) { console.error("Update Action Fail"); }
+        } catch (e) { console.error("Update Action Fail", e); }
     };
 
     document.getElementById('surveyForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         if(!isAuthorized || !auth.currentUser) return;
+        
         const btn = document.getElementById('submitBtn');
         const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
         const t = translations[lang];
+        
+        // 最終檢查日期防止繞過
+        const dateVal = document.getElementById('serviceDate').value;
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        const toISO = (d) => d.toISOString().split('T')[0];
+        if (dateVal !== toISO(now) && dateVal !== toISO(yesterday)) {
+            document.getElementById('serviceDate').value = toISO(now);
+            return;
+        }
+
         btn.disabled = true; btn.innerText = "...Processing...";
         
         const ratings = {};
@@ -311,17 +362,18 @@
             masseurId: document.getElementById('masseurId').value, 
             customerName: document.getElementById('custName').value || "Anonymous", 
             customerPhone: document.getElementById('custPhone').value || "N/A", 
-            serviceDate: document.getElementById('serviceDate').value, 
+            serviceDate: dateVal, 
             suggestions: suggestionText, 
             ratings: ratings, 
             submittedLang: lang, 
             createdAt: serverTimestamp(), 
             marketingAction: 'Pending',
-            isFilteredNegative: shouldHideMarketing
+            isFilteredNegative: shouldHideMarketing,
+            uid: auth.currentUser.uid
         };
 
         try {
-            const docRef = await addDoc(collection(db, 'apps', 'zhongqing-v1', 'surveys'), surveyData);
+            const docRef = await addDoc(SURVEY_COLLECTION, surveyData);
             lastDocId = docRef.id;
             
             const googleBtn = document.getElementById('googleReviewBtn');
@@ -343,13 +395,25 @@
             document.getElementById('successModal').classList.replace('modal-hide', 'modal-show');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch(err) { 
-            console.error(err);
+            console.error("Write Error:", err);
         } finally { 
             btn.disabled = false; btn.innerText = t.submitBtn; 
         }
     });
 
-    window.onload = () => { renderQuestions(); applyTimeConstraints(); signInAnonymously(auth); };
+    window.onload = () => { 
+        renderQuestions(); 
+        applyTimeConstraints(); 
+        // 依照規範先行登入
+        const initAuth = async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                console.error("Auth Error");
+            }
+        };
+        initAuth();
+    };
 </script>
 </body>
 </html>
