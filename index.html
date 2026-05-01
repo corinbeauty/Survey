@@ -191,15 +191,15 @@
             modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
         },
         ja: { 
-            title: "サービスアンケート", branchLabel: "店舗", branchName: "中清行館", dateLabel: "日付 *", 
+            title: "服務意見調查表", branchLabel: "店舗", branchName: "中清行館", dateLabel: "日付 *", 
             q1: "番号紹介とコース確認はありましたか？", q1_a1: "積極的", q1_a2: "後で", q1_a3: "全くなし", 
             q2: "力加減の確認はありましたか？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "全くなし",
             q3: "臭い(体臭/煙草)は気になりましたか？", q3_a1: "気にならない", q3_a2: "少し気になる", q3_a3: "非常に気になる",
             q4: "時間配分は適切でしたか？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "非常に悪い",
-            q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失礼",
-            q6: "不快な身体接触はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
+            q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失禮",
+            q6: "不快な身體接觸はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
             q7: "禁止されている危険な動作は？", q7_a1: "全くなし", q7_a2: "少し危ない", q7_a3: "非常に危険",
-            q8: "キャンペーンの案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
+            q8: "キャンペーンの案內は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
             q9: "名刺の提供はありましたか？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なし",
             q10: "次回も指名されますか？", q10_a1: "必ず指名", q10_a2: "検討中", q10_a3: "しない", 
             masseurIdLabel: "スタッフ番号 *", submitBtn: "アンケート送信", ph_masseur: "番号入力", ph_name: "お名前", ph_phone: "電話番号", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
@@ -248,16 +248,13 @@
         const todayStr = toISO(now);
         const yesterdayStr = toISO(yesterday);
 
-        // 設置 HTML5 原生限制 (Android 主要依賴此項)
         dateInput.max = todayStr;
         dateInput.min = yesterdayStr;
         dateInput.value = todayStr;
 
-        // 針對 iOS Safari 滾輪可越界的修正 (強制攔截)
         dateInput.addEventListener('change', (e) => {
             const selectedDate = e.target.value;
             if (selectedDate !== todayStr && selectedDate !== yesterdayStr) {
-                // 如果不符合今日或昨日，強制跳回今日
                 e.target.value = todayStr;
                 const warning = document.getElementById('dateWarning');
                 if (warning) {
@@ -332,7 +329,6 @@
         const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
         const t = translations[lang];
         
-        // 最終檢查日期防止繞過
         const dateVal = document.getElementById('serviceDate').value;
         const now = new Date();
         const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
@@ -345,17 +341,29 @@
         btn.disabled = true; btn.innerText = "...Processing...";
         
         const ratings = {};
-        let hasNegativeRating = false;
+        let hasCoreNegativeRating = false; // 用來追蹤核心服務是否有負評
+
         for(let i=1; i<=10; i++) {
             const radioGroup = document.getElementsByName(`q${i}`);
             const c = document.querySelector(`input[name="q${i}"]:checked`);
             ratings[`q${i}`] = c ? c.value : null;
-            if (radioGroup[2].checked) hasNegativeRating = true;
+
+            /**
+             * 負評分流邏輯修正：
+             * Q1-Q7 以及 Q10 為核心服務指標，選中第 3 個選項 (負評) 則觸發隱藏行銷。
+             * Q8 (行銷活動) 與 Q9 (名片) 排除在「負評過濾」之外。
+             */
+            const isCoreQuestion = (i <= 7 || i === 10);
+            if (isCoreQuestion && radioGroup[2].checked) {
+                hasCoreNegativeRating = true;
+            }
         }
 
         const suggestionText = document.getElementById('suggestions').value.trim();
         const isTextNegative = await checkIsNegativeSentiment(suggestionText);
-        const shouldHideMarketing = hasNegativeRating || isTextNegative;
+        
+        // 最終決定是否顯示 5 星好評導流：核心負評為真 或 語意分析為負
+        const shouldHideMarketing = hasCoreNegativeRating || isTextNegative;
 
         const surveyData = { 
             branch: t.branchName, 
@@ -404,7 +412,6 @@
     window.onload = () => { 
         renderQuestions(); 
         applyTimeConstraints(); 
-        // 依照規範先行登入
         const initAuth = async () => {
             try {
                 await signInAnonymously(auth);
