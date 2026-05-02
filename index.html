@@ -43,7 +43,7 @@
 <div id="app" class="max-w-md mx-auto">
     <header class="bg-white sticky top-0 z-20 shadow-sm px-4 py-4 mb-4 text-center">
         <h1 class="text-xl font-bold text-gray-800" data-i18n="title">服務意見調查表</h1>
-        <p id="conn-info" class="text-[8px] text-gray-400 font-mono tracking-widest uppercase italic">Establishing Secure Connection...</p>
+        <p id="conn-info" class="text-[8px] text-gray-400 font-mono tracking-widest uppercase italic">Initializing Secure Connection...</p>
         <div class="flex justify-between gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200 mt-4">
             <button onclick="window.changeLang('zh')" id="btn-zh" class="lang-btn active flex-1 py-2.5 rounded-xl text-xs font-bold">中文</button>
             <button onclick="window.changeLang('en')" id="btn-en" class="lang-btn flex-1 py-2.5 rounded-xl text-xs font-bold">EN</button>
@@ -54,6 +54,7 @@
 
     <main class="px-4 space-y-4">
         <form id="surveyForm" class="space-y-4">
+            <!-- 分店資訊 -->
             <div class="bg-white p-5 rounded-3xl border border-blue-100 shadow-sm">
                 <label class="block text-[10px] font-bold text-blue-400 mb-1 uppercase tracking-tighter" data-i18n="branchLabel">服務分店</label>
                 <div class="flex items-center text-gray-800 font-bold text-lg italic">📍 <span data-i18n="branchName">中清行館</span></div>
@@ -61,6 +62,7 @@
 
             <div id="questionsContainer" class="space-y-4"></div>
 
+            <!-- 客戶與師傅資訊 -->
             <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="masseurIdLabel">師傅號碼 *</label>
@@ -76,10 +78,13 @@
                 <div><label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="suggestLabel">建議內容詳述</label><textarea id="suggestions" rows="3" data-ph="ph_suggest" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none"></textarea></div>
             </div>
 
-            <button type="submit" id="submitBtn" disabled class="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-lg active:scale-95 transition-all text-lg opacity-50"><span data-i18n="submitBtn">提交問卷 Submit</span></button>
+            <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-lg active:scale-95 transition-all text-lg flex items-center justify-center gap-2">
+                <span data-i18n="submitBtn">提交問卷 Submit</span>
+            </button>
         </form>
     </main>
 
+    <!-- 成功彈窗 -->
     <div id="successModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md modal-hide">
         <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl text-center border-b-8 border-amber-400">
             <div class="bg-blue-600 py-10 text-white">
@@ -103,7 +108,8 @@
         </div>
     </div>
     
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-8 py-4 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none z-50 text-sm font-bold min-w-[280px] text-center"></div>
+    <!-- 通知氣泡 -->
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-4 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none z-[200] text-sm font-bold text-center"></div>
 </div>
 
 <script type="module">
@@ -111,7 +117,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // 使用系統規定的 ID
+    // Firebase 配置
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'zhongqing-v1';
     const firebaseConfig = {
         apiKey: "AIzaSyCuytMbR0wfPk0vChxqI66Zci0uJtGiizE",
@@ -125,32 +131,33 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    let isAuthorized = false;
+    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+    const SURVEY_COLLECTION_PATH = ['artifacts', appId, 'public', 'data', 'surveys'];
+
+    let isAuthReady = false;
     let lastDocId = null;
 
-    const apiKey = ""; // Gemini API Key
-    const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+    // 顯示通知
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.style.opacity = '1';
+        setTimeout(() => toast.style.opacity = '0', 3000);
+    }
 
-    // 核心路徑規範：/artifacts/{appId}/public/data/{collectionName}
-    const SURVEY_COLLECTION = collection(db, 'artifacts', appId, 'public', 'data', 'surveys');
-
+    // AI 語意分析
     async function checkIsNegativeSentiment(text) {
         if (!text || text.trim().length === 0) return false;
         const prompt = `你是一個專業分析師。請分析這段文字是正向還是負向投訴。只需回傳一個單字：NEGATIVE 或 POSITIVE。內容：${text}`;
-        const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
         try {
-            const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+            const response = await fetch(`${GEMINI_API_URL}?key=`, { // 空 key 由環境提供
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
             const result = await response.json();
-            const sentiment = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
-            return sentiment === "NEGATIVE";
-        } catch (err) {
-            return text.length > 5;
-        }
+            return result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() === "NEGATIVE";
+        } catch (err) { return false; }
     }
 
     const translations = {
@@ -166,11 +173,9 @@
             q8: "師傅有邀請打卡按讚介紹優惠活動嗎？", q8_a1: "熱情主動", q8_a2: "非常被動", q8_a3: "完全沒說", 
             q9: "師傅服務結束送客有主動給您名片嗎？", q9_a1: "熱情主動", q9_a2: "要了才給", q9_a3: "沒有給名片", 
             q10: "今天服務的師傅會讓您下次再老點他嗎？", q10_a1: "一定老點", q10_a2: "再試試看", q10_a3: "絕對不會", 
-            masseurIdLabel: "師傅號碼 *", submitBtn: "提交問卷 Submit", ph_masseur: "輸入編號", ph_name: "輸入姓名", ph_phone: "輸入電話", ph_suggest: "您的建議...", suc: "✅ 提交成功！", err: "❌ 寫入失敗", authReady: "Secure Cloud Ready",
-            modalTitle: "感謝您的回饋！", modalSub: "Success Received", 
-            modalText: "您的支持是我們進步的動力。<br>邀請您留下 5 星好評！", 
-            modalTextNegative: "我們已收到您的回饋，<br>這將作為我們改進的重要參考。", 
-            modalGoGoogle: "馬上評論", modalClose: "下次再評", modalCloseNegative: "關閉視窗"
+            masseurIdLabel: "師傅號碼 *", submitBtn: "提交問卷 Submit", ph_masseur: "輸入編號", ph_name: "輸入姓名", ph_phone: "輸入電話", ph_suggest: "您的建議...",
+            modalTitle: "感謝您的回饋！", modalSub: "Success Received", modalText: "您的支持是我們進步的動力。<br>邀請您留下 5 星好評！", 
+            modalTextNegative: "我們已收到您的回饋，<br>這將作為我們改進的重要參考。", modalGoGoogle: "馬上評論", modalClose: "下次再評", modalCloseNegative: "關閉視窗"
         },
         en: { 
             title: "Service Survey", branchLabel: "Branch", branchName: "Zhongqing Branch", dateLabel: "Date *", 
@@ -184,29 +189,25 @@
             q8: "Promotion intro?", q8_a1: "Proactive", q8_a2: "Passive", q8_a3: "None",
             q9: "Business card offered?", q9_a1: "Proactive", q9_a2: "Requested", q9_a3: "No",
             q10: "Would you re-book?", q10_a1: "Definitely", q10_a2: "Maybe", q10_a3: "Never", 
-            masseurIdLabel: "Masseur ID *", submitBtn: "Submit Survey", ph_masseur: "ID No.", ph_name: "Name", ph_phone: "Phone", ph_suggest: "Feedback...", suc: "✅ Submitted!", err: "❌ Failed", authReady: "Secure Cloud Ready",
-            modalTitle: "Thank You!", modalSub: "Success Received", 
-            modalText: "We value your feedback.<br>Please leave a 5-star review!", 
-            modalTextNegative: "Your feedback has been received.<br>It will help us improve our service.", 
-            modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
+            masseurIdLabel: "Masseur ID *", submitBtn: "Submit Survey", ph_masseur: "ID No.", ph_name: "Name", ph_phone: "Phone", ph_suggest: "Feedback...",
+            modalTitle: "Thank You!", modalSub: "Success Received", modalText: "We value your feedback.<br>Please leave a 5-star review!", 
+            modalTextNegative: "Your feedback has been received.<br>It will help us improve our service.", modalGoGoogle: "Review Now", modalClose: "Maybe Later", modalCloseNegative: "Close"
         },
         ja: { 
-            title: "服務意見調查表", branchLabel: "店舗", branchName: "中清行館", dateLabel: "日付 *", 
+            title: "サービスアンケート", branchLabel: "店舗", branchName: "中清行館", dateLabel: "日付 *", 
             q1: "番号紹介とコース確認はありましたか？", q1_a1: "積極的", q1_a2: "後で", q1_a3: "全くなし", 
             q2: "力加減の確認はありましたか？", q2_a1: "積極的", q2_a2: "受動的", q2_a3: "全くなし",
             q3: "臭い(体臭/煙草)は気になりましたか？", q3_a1: "気にならない", q3_a2: "少し気になる", q3_a3: "非常に気になる",
             q4: "時間配分は適切でしたか？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "非常に悪い",
-            q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失禮",
-            q6: "不快な身體接觸はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
+            q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失礼",
+            q6: "不快な身体接触はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
             q7: "禁止されている危険な動作は？", q7_a1: "全くなし", q7_a2: "少し危ない", q7_a3: "非常に危険",
-            q8: "キャンペーンの案內は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
+            q8: "キャンペーンの案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
             q9: "名刺の提供はありましたか？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なし",
             q10: "次回も指名されますか？", q10_a1: "必ず指名", q10_a2: "検討中", q10_a3: "しない", 
-            masseurIdLabel: "スタッフ番号 *", submitBtn: "アンケート送信", ph_masseur: "番号入力", ph_name: "お名前", ph_phone: "電話番号", ph_suggest: "ご意見...", suc: "✅ 送信完了！", err: "❌ 失敗", authReady: "接続完了",
-            modalTitle: "ありがとうございます！", modalSub: "Success Received", 
-            modalText: "満足いただけましたら、5つ星をお願いします！", 
-            modalTextNegative: "貴重なご意見ありがとうございます。<br>改善の参考にさせていただきます。", 
-            modalGoGoogle: "評価する", modalClose: "閉じる", modalCloseNegative: "閉じる"
+            masseurIdLabel: "スタッフ番号 *", submitBtn: "送信 Submit", ph_masseur: "番号入力", ph_name: "お名前", ph_phone: "電話番号", ph_suggest: "ご意見...",
+            modalTitle: "ありがとうございます！", modalSub: "Success Received", modalText: "満足いただけましたら、5つ星をお願いします！", 
+            modalTextNegative: "貴重なご意見ありがとうございます。<br>改善の参考にさせていただきます。", modalGoGoogle: "評価する", modalClose: "閉じる", modalCloseNegative: "閉じる"
         },
         ko: { 
             title: "서비스 만족도 조사", branchLabel: "지점", branchName: "중청점", dateLabel: "날짜 *", 
@@ -217,63 +218,43 @@
             q5: "관리사의 매너는 어떠했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
             q6: "불편한 신체 접촉이 있었습니까？", q6_a1: "전문적임", q6_a2: "약간 당황", q6_a3: "매우 불쾌",
             q7: "위험한 동작이 있었습니까？", q7_a1: "전혀 없음", q7_a2: "약간 위험", q7_a3: "매우 위험",
-            q8: "이벤트 및 프로모션 안내는？", q8_a1: "적극 안내", q8_a2: "수동적", q8_a3: "전혀 없음",
+            q8: "이벤트 및 프로門 안내는？", q8_a1: "적극 안내", q8_a2: "수동적", q8_a3: "전혀 없음",
             q9: "명함 제공은 적극적이었습니까？", q9_a1: "적극 제공", q9_a2: "요청 시", q9_a3: "제공 안함",
             q10: "다시 지명하시겠습니까？", q10_a1: "꼭 지명함", q10_a2: "생각 중", q10_a3: "안 함", 
-            masseurIdLabel: "관리사 번호 *", submitBtn: "설문 제출", ph_masseur: "번호 입력", ph_name: "성함", ph_phone: "전화번호", ph_suggest: "의견 입력...", suc: "✅ 제출 성공！", err: "❌ 실패", authReady: "연결 완료",
-            modalTitle: "감사합니다!", modalSub: "Success Received", 
-            modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", 
-            modalTextNegative: "보내주신 의견 감사합니다.<br>더 나은 서비스를 위해 노력하겠습니다.", 
-            modalGoGoogle: "리뷰하기", modalClose: "닫기", modalCloseNegative: "닫기"
+            masseurIdLabel: "관리사 번호 *", submitBtn: "제출 Submit", ph_masseur: "번호 입력", ph_name: "성함", ph_phone: "전화번호", ph_suggest: "의견 입력...",
+            modalTitle: "감사합니다!", modalSub: "Success Received", modalText: "만족하셨다면 별 5개 리뷰를 부탁드립니다!", 
+            modalTextNegative: "보내주신 의견 감사합니다.<br>더 나은 서비스를 위해 노력하겠습니다.", modalGoGoogle: "리뷰하기", modalClose: "닫기", modalCloseNegative: "닫기"
         }
     };
 
-    /**
-     * iOS 日期鎖定強化邏輯
-     */
-    function applyTimeConstraints() {
+    // 日期限制與 iOS 強制鎖定
+    function applyDatePolicy() {
         const dateInput = document.getElementById('serviceDate');
-        if(!dateInput) return;
-
         const now = new Date();
-        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        const yesterday = new Date(now.getTime() - 86400000);
+        const fmt = (d) => d.toISOString().split('T')[0];
         
-        const toISO = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        const todayStr = toISO(now);
-        const yesterdayStr = toISO(yesterday);
-
-        dateInput.max = todayStr;
-        dateInput.min = yesterdayStr;
-        dateInput.value = todayStr;
+        dateInput.max = fmt(now);
+        dateInput.min = fmt(yesterday);
+        dateInput.value = fmt(now);
 
         dateInput.addEventListener('change', (e) => {
-            const selectedDate = e.target.value;
-            if (selectedDate !== todayStr && selectedDate !== yesterdayStr) {
-                e.target.value = todayStr;
-                const warning = document.getElementById('dateWarning');
-                if (warning) {
-                    warning.classList.remove('hidden');
-                    setTimeout(() => warning.classList.add('hidden'), 3000);
-                }
+            if (e.target.value !== fmt(now) && e.target.value !== fmt(yesterday)) {
+                e.target.value = fmt(now);
+                document.getElementById('dateWarning').classList.remove('hidden');
+            } else {
+                document.getElementById('dateWarning').classList.add('hidden');
             }
         });
     }
 
     function renderQuestions() {
-        const container = document.getElementById('questionsContainer'); if(!container) return;
+        const container = document.getElementById('questionsContainer');
         container.innerHTML = '';
         for(let i=1; i<=10; i++) {
             container.innerHTML += `
             <div class="bg-white p-6 question-card shadow-sm border border-gray-100">
-                <p class="font-bold text-gray-800 mb-4 text-base leading-snug">
-                    ${i}. <span data-i18n="q${i}">...</span>
-                </p>
+                <p class="font-bold text-gray-800 mb-4 text-base">${i}. <span data-i18n="q${i}">...</span></p>
                 <div class="space-y-3">
                     ${[1,2,3].map(a => `
                         <label class="flex items-center p-4 border rounded-2xl border-gray-100 bg-gray-50/50 active:bg-blue-50 transition cursor-pointer">
@@ -286,140 +267,122 @@
     }
 
     window.changeLang = function(lang) {
-        document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-        const activeBtn = document.getElementById(`btn-${lang}`); if(activeBtn) activeBtn.classList.add('active');
-        const trans = translations[lang] || translations['zh'];
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.id === `btn-${lang}`));
+        const trans = translations[lang];
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
-            if (trans[key]) {
-                el.innerHTML = trans[key];
-                const radioInput = el.previousElementSibling;
-                if (radioInput && radioInput.type === 'radio') radioInput.value = trans[key]; 
-            }
+            if (trans[key]) el.innerHTML = trans[key];
+            if (el.previousElementSibling?.type === 'radio') el.previousElementSibling.value = trans[key];
         });
-        document.querySelectorAll('[data-ph]').forEach(el => {
-            const key = el.getAttribute('data-ph');
-            if (trans[key]) el.placeholder = trans[key];
-        });
+        document.querySelectorAll('[data-ph]').forEach(el => el.placeholder = trans[el.getAttribute('data-ph')] || '');
     };
 
+    // Firebase Auth 監聽
     onAuthStateChanged(auth, (user) => {
-        if(user) {
-            isAuthorized = true;
-            const btn = document.getElementById('submitBtn'); if(btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
-            window.changeLang('zh');
-        }
+        isAuthReady = !!user;
+        document.getElementById('conn-info').innerText = user ? "Secure Cloud Ready" : "Retrying Connection...";
+        document.getElementById('conn-info').classList.toggle('text-green-500', isAuthReady);
     });
 
+    // 行銷動作處理
     window.handleMarketingAction = async (action) => {
         if (!lastDocId || !auth.currentUser) return;
         try {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'surveys', lastDocId);
+            const docRef = doc(db, ...SURVEY_COLLECTION_PATH, lastDocId);
             await updateDoc(docRef, { marketingAction: action });
             if (action === 'Reviewed') window.open("https://maps.app.goo.gl/1Rto7b5TRNNF35yf8", "_blank");
             document.getElementById('successModal').classList.replace('modal-show', 'modal-hide');
-        } catch (e) { console.error("Update Action Fail", e); }
+        } catch (e) { console.error(e); }
     };
 
+    // 表單提交主邏輯
     document.getElementById('surveyForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        if(!isAuthorized || !auth.currentUser) return;
-        
         const btn = document.getElementById('submitBtn');
         const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
         const t = translations[lang];
-        
-        const dateVal = document.getElementById('serviceDate').value;
-        const now = new Date();
-        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        const toISO = (d) => d.toISOString().split('T')[0];
-        if (dateVal !== toISO(now) && dateVal !== toISO(yesterday)) {
-            document.getElementById('serviceDate').value = toISO(now);
-            return;
-        }
 
-        btn.disabled = true; btn.innerText = "...Processing...";
-        
-        const ratings = {};
-        let hasCoreNegativeRating = false; // 用來追蹤核心服務是否有負評
-
-        for(let i=1; i<=10; i++) {
-            const radioGroup = document.getElementsByName(`q${i}`);
-            const c = document.querySelector(`input[name="q${i}"]:checked`);
-            ratings[`q${i}`] = c ? c.value : null;
-
-            /**
-             * 負評分流邏輯修正：
-             * Q1-Q7 以及 Q10 為核心服務指標，選中第 3 個選項 (負評) 則觸發隱藏行銷。
-             * Q8 (行銷活動) 與 Q9 (名片) 排除在「負評過濾」之外。
-             */
-            const isCoreQuestion = (i <= 7 || i === 10);
-            if (isCoreQuestion && radioGroup[2].checked) {
-                hasCoreNegativeRating = true;
-            }
-        }
-
-        const suggestionText = document.getElementById('suggestions').value.trim();
-        const isTextNegative = await checkIsNegativeSentiment(suggestionText);
-        
-        // 最終決定是否顯示 5 星好評導流：核心負評為真 或 語意分析為負
-        const shouldHideMarketing = hasCoreNegativeRating || isTextNegative;
-
-        const surveyData = { 
-            branch: t.branchName, 
-            masseurId: document.getElementById('masseurId').value, 
-            customerName: document.getElementById('custName').value || "Anonymous", 
-            customerPhone: document.getElementById('custPhone').value || "N/A", 
-            serviceDate: dateVal, 
-            suggestions: suggestionText, 
-            ratings: ratings, 
-            submittedLang: lang, 
-            createdAt: serverTimestamp(), 
-            marketingAction: 'Pending',
-            isFilteredNegative: shouldHideMarketing,
-            uid: auth.currentUser.uid
-        };
+        // 1. 狀態保護
+        if (btn.disabled) return;
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 處理中...`;
 
         try {
-            const docRef = await addDoc(SURVEY_COLLECTION, surveyData);
-            lastDocId = docRef.id;
-            
-            const googleBtn = document.getElementById('googleReviewBtn');
-            const modalTextEl = document.getElementById('modalText');
-            const modalCloseBtn = document.getElementById('modalCloseBtn');
+            // 2. 確保 Auth 已就緒
+            if (!auth.currentUser) {
+                await signInAnonymously(auth);
+            }
 
-            if (shouldHideMarketing) {
-                googleBtn.style.display = 'none'; 
-                modalTextEl.innerHTML = t.modalTextNegative; 
-                modalCloseBtn.innerText = t.modalCloseNegative; 
+            // 3. 蒐集評分並判斷核心負評
+            const ratings = {};
+            let hasCoreNegative = false;
+            for(let i=1; i<=10; i++) {
+                const inputs = document.getElementsByName(`q${i}`);
+                const checked = Array.from(inputs).find(input => input.checked);
+                ratings[`q${i}`] = checked ? checked.value : null;
+                // Q1-Q7, Q10 為核心，第三個選項為負評
+                if ((i <= 7 || i === 10) && inputs[2].checked) hasCoreNegative = true;
+            }
+
+            // 4. AI 情緒校驗
+            const suggest = document.getElementById('suggestions').value.trim();
+            const isNegativeText = await checkIsNegativeSentiment(suggest);
+            const isFiltered = hasCoreNegative || isNegativeText;
+
+            // 5. 寫入資料庫
+            const surveyData = {
+                branch: t.branchName,
+                masseurId: document.getElementById('masseurId').value,
+                customerName: document.getElementById('custName').value || "Anonymous",
+                customerPhone: document.getElementById('custPhone').value || "N/A",
+                serviceDate: document.getElementById('serviceDate').value,
+                suggestions: suggest,
+                ratings: ratings,
+                submittedLang: lang,
+                createdAt: serverTimestamp(),
+                marketingAction: 'Pending',
+                isFilteredNegative: isFiltered,
+                uid: auth.currentUser?.uid || 'anonymous'
+            };
+
+            const docRef = await addDoc(collection(db, ...SURVEY_COLLECTION_PATH), surveyData);
+            lastDocId = docRef.id;
+
+            // 6. 成功反饋與彈窗
+            const gBtn = document.getElementById('googleReviewBtn');
+            const mText = document.getElementById('modalText');
+            const cBtn = document.getElementById('modalCloseBtn');
+
+            if (isFiltered) {
+                gBtn.style.display = 'none';
+                mText.innerHTML = t.modalTextNegative;
+                cBtn.innerText = t.modalCloseNegative;
             } else {
-                googleBtn.style.display = 'flex'; 
-                modalTextEl.innerHTML = t.modalText; 
-                modalCloseBtn.innerText = t.modalClose; 
+                gBtn.style.display = 'flex';
+                mText.innerHTML = t.modalText;
+                cBtn.innerText = t.modalClose;
             }
 
             document.getElementById('surveyForm').reset();
-            applyTimeConstraints();
+            applyDatePolicy();
             document.getElementById('successModal').classList.replace('modal-hide', 'modal-show');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch(err) { 
-            console.error("Write Error:", err);
-        } finally { 
-            btn.disabled = false; btn.innerText = t.submitBtn; 
+
+        } catch (err) {
+            console.error("Submission failed:", err);
+            showToast("⚠️ 提交失敗，請檢查網路連線後再試。");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     });
 
-    window.onload = () => { 
-        renderQuestions(); 
-        applyTimeConstraints(); 
-        const initAuth = async () => {
-            try {
-                await signInAnonymously(auth);
-            } catch (e) {
-                console.error("Auth Error");
-            }
-        };
-        initAuth();
+    window.onload = () => {
+        renderQuestions();
+        applyDatePolicy();
+        window.changeLang('zh');
+        signInAnonymously(auth).catch(e => console.error("Auth Fail"));
     };
 </script>
 </body>
