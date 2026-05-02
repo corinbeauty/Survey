@@ -22,9 +22,6 @@
         input:focus, textarea:focus { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); background-color: white !important; border-color: #2563eb !important; }
         #submitBtn:disabled { background-color: #94a3b8; cursor: not-allowed; opacity: 0.5; }
         
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-
         #successModal { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
         .modal-show { opacity: 1; pointer-events: auto; transform: scale(1); }
         .modal-hide { opacity: 0; pointer-events: none; transform: scale(0.95); }
@@ -43,7 +40,7 @@
 <div id="app" class="max-w-md mx-auto">
     <header class="bg-white sticky top-0 z-20 shadow-sm px-4 py-4 mb-4 text-center">
         <h1 class="text-xl font-bold text-gray-800" data-i18n="title">服務意見調查表</h1>
-        <p id="conn-info" class="text-[8px] text-gray-400 font-mono tracking-widest uppercase italic">Initializing Secure Connection...</p>
+        <p id="conn-info" class="text-[8px] text-gray-400 font-mono tracking-widest uppercase italic">Checking Connection...</p>
         <div class="flex justify-between gap-1 bg-gray-100 p-1 rounded-2xl border border-gray-200 mt-4">
             <button onclick="window.changeLang('zh')" id="btn-zh" class="lang-btn active flex-1 py-2.5 rounded-xl text-xs font-bold">中文</button>
             <button onclick="window.changeLang('en')" id="btn-en" class="lang-btn flex-1 py-2.5 rounded-xl text-xs font-bold">EN</button>
@@ -54,7 +51,6 @@
 
     <main class="px-4 space-y-4">
         <form id="surveyForm" class="space-y-4">
-            <!-- 分店資訊 -->
             <div class="bg-white p-5 rounded-3xl border border-blue-100 shadow-sm">
                 <label class="block text-[10px] font-bold text-blue-400 mb-1 uppercase tracking-tighter" data-i18n="branchLabel">服務分店</label>
                 <div class="flex items-center text-gray-800 font-bold text-lg italic">📍 <span data-i18n="branchName">中清行館</span></div>
@@ -62,7 +58,6 @@
 
             <div id="questionsContainer" class="space-y-4"></div>
 
-            <!-- 客戶與師傅資訊 -->
             <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-400 mb-2 uppercase" data-i18n="masseurIdLabel">師傅號碼 *</label>
@@ -84,7 +79,6 @@
         </form>
     </main>
 
-    <!-- 成功彈窗 -->
     <div id="successModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md modal-hide">
         <div class="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl text-center border-b-8 border-amber-400">
             <div class="bg-blue-600 py-10 text-white">
@@ -108,56 +102,61 @@
         </div>
     </div>
     
-    <!-- 通知氣泡 -->
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-4 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none z-[200] text-sm font-bold text-center"></div>
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-8 py-4 rounded-full shadow-2xl transition-all opacity-0 pointer-events-none z-[200] text-sm font-bold text-center"></div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Firebase 配置
+    // 取得環境變數
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'zhongqing-v1';
-    const firebaseConfig = {
-        apiKey: "AIzaSyCuytMbR0wfPk0vChxqI66Zci0uJtGiizE",
-        authDomain: "survey-c3aa5.firebaseapp.com",
-        projectId: "survey-c3aa5",
-        storageBucket: "survey-c3aa5.firebasestorage.app",
-        messagingSenderId: "874594469122",
-        appId: "1:874594469122:web:2b2c1208b20d2095b9ae1b"
-    };
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
     const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
-    const SURVEY_COLLECTION_PATH = ['artifacts', appId, 'public', 'data', 'surveys'];
 
-    let isAuthReady = false;
     let lastDocId = null;
+    let currentUser = null;
 
-    // 顯示通知
-    function showToast(msg) {
+    // Toast 提示
+    function showToast(msg, isError = false) {
         const toast = document.getElementById('toast');
         toast.innerText = msg;
+        toast.style.backgroundColor = isError ? '#ef4444' : '#1f2937';
         toast.style.opacity = '1';
-        setTimeout(() => toast.style.opacity = '0', 3000);
+        setTimeout(() => toast.style.opacity = '0', 4000);
     }
 
-    // AI 語意分析
-    async function checkIsNegativeSentiment(text) {
-        if (!text || text.trim().length === 0) return false;
-        const prompt = `你是一個專業分析師。請分析這段文字是正向還是負向投訴。只需回傳一個單字：NEGATIVE 或 POSITIVE。內容：${text}`;
+    // AI 語意分析 (帶有容錯機制的非阻塞調用)
+    async function getSentimentAnalysis(text) {
+        if (!text || text.trim().length < 2) return "POSITIVE";
+        const apiKey = ""; // API Key 會由系統注入
+        const payload = { contents: [{ parts: [{ text: `分析情緒，回傳單字 NEGATIVE 或 POSITIVE：${text}` }] }] };
+        
         try {
-            const response = await fetch(`${GEMINI_API_URL}?key=`, { // 空 key 由環境提供
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4秒超時
+            
+            const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
+            
             const result = await response.json();
-            return result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() === "NEGATIVE";
-        } catch (err) { return false; }
+            const sentiment = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
+            return sentiment === "NEGATIVE" ? "NEGATIVE" : "POSITIVE";
+        } catch (err) {
+            console.warn("AI Analysis Failed, defaulting to POSITIVE");
+            return "POSITIVE"; // 容錯：分析失敗不阻斷提交
+        }
     }
 
     const translations = {
@@ -200,9 +199,9 @@
             q3: "臭い(体臭/煙草)は気になりましたか？", q3_a1: "気にならない", q3_a2: "少し気になる", q3_a3: "非常に気になる",
             q4: "時間配分は適切でしたか？", q4_a1: "非常に良い", q4_a2: "普通", q4_a3: "非常に悪い",
             q5: "スタッフのマナーはどうでしたか？", q5_a1: "丁寧", q5_a2: "普通", q5_a3: "失礼",
-            q6: "不快な身体接触はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
+            q6: "不快な身體接觸はありましたか？", q6_a1: "適切", q6_a2: "少し気まずい", q6_a3: "非常に不快",
             q7: "禁止されている危険な動作は？", q7_a1: "全くなし", q7_a2: "少し危ない", q7_a3: "非常に危険",
-            q8: "キャンペーンの案内は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
+            q8: "キャンペーンの案內は？", q8_a1: "積極的", q8_a2: "受動的", q8_a3: "なし",
             q9: "名刺の提供はありましたか？", q9_a1: "積極的", q9_a2: "求めたら", q9_a3: "なし",
             q10: "次回も指名されますか？", q10_a1: "必ず指名", q10_a2: "検討中", q10_a3: "しない", 
             masseurIdLabel: "スタッフ番号 *", submitBtn: "送信 Submit", ph_masseur: "番号入力", ph_name: "お名前", ph_phone: "電話番号", ph_suggest: "ご意見...",
@@ -218,7 +217,7 @@
             q5: "관리사의 매너는 어떠했습니까？", q5_a1: "정중함", q5_a2: "보통", q5_a3: "무례함",
             q6: "불편한 신체 접촉이 있었습니까？", q6_a1: "전문적임", q6_a2: "약간 당황", q6_a3: "매우 불쾌",
             q7: "위험한 동작이 있었습니까？", q7_a1: "전혀 없음", q7_a2: "약간 위험", q7_a3: "매우 위험",
-            q8: "이벤트 및 프로門 안내는？", q8_a1: "적극 안내", q8_a2: "수동적", q8_a3: "전혀 없음",
+            q8: "이벤트 및 프로모션 안내는？", q8_a1: "적극 안내", q8_a2: "수동적", q8_a3: "전혀 없음",
             q9: "명함 제공은 적극적이었습니까？", q9_a1: "적극 제공", q9_a2: "요청 시", q9_a3: "제공 안함",
             q10: "다시 지명하시겠습니까？", q10_a1: "꼭 지명함", q10_a2: "생각 중", q10_a3: "안 함", 
             masseurIdLabel: "관리사 번호 *", submitBtn: "제출 Submit", ph_masseur: "번호 입력", ph_name: "성함", ph_phone: "전화번호", ph_suggest: "의견 입력...",
@@ -227,7 +226,6 @@
         }
     };
 
-    // 日期限制與 iOS 強制鎖定
     function applyDatePolicy() {
         const dateInput = document.getElementById('serviceDate');
         const now = new Date();
@@ -277,79 +275,99 @@
         document.querySelectorAll('[data-ph]').forEach(el => el.placeholder = trans[el.getAttribute('data-ph')] || '');
     };
 
-    // Firebase Auth 監聽
+    // Firebase 初始化與登入
+    const initializeAuth = async () => {
+        try {
+            if (initialToken) {
+                await signInWithCustomToken(auth, initialToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (e) {
+            console.error("Auth init failed", e);
+            showToast("⚠️ 網路連線不穩，請重新載入頁面", true);
+        }
+    };
+
     onAuthStateChanged(auth, (user) => {
-        isAuthReady = !!user;
-        document.getElementById('conn-info').innerText = user ? "Secure Cloud Ready" : "Retrying Connection...";
-        document.getElementById('conn-info').classList.toggle('text-green-500', isAuthReady);
+        currentUser = user;
+        const info = document.getElementById('conn-info');
+        if (user) {
+            info.innerText = "Secure Cloud Ready";
+            info.className = "text-[8px] text-green-500 font-mono tracking-widest uppercase italic";
+        } else {
+            info.innerText = "Disconnected";
+            info.className = "text-[8px] text-red-400 font-mono tracking-widest uppercase italic";
+        }
     });
 
-    // 行銷動作處理
     window.handleMarketingAction = async (action) => {
-        if (!lastDocId || !auth.currentUser) return;
+        if (!lastDocId || !currentUser) return;
         try {
-            const docRef = doc(db, ...SURVEY_COLLECTION_PATH, lastDocId);
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'surveys', lastDocId);
             await updateDoc(docRef, { marketingAction: action });
             if (action === 'Reviewed') window.open("https://maps.app.goo.gl/1Rto7b5TRNNF35yf8", "_blank");
             document.getElementById('successModal').classList.replace('modal-show', 'modal-hide');
         } catch (e) { console.error(e); }
     };
 
-    // 表單提交主邏輯
     document.getElementById('surveyForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('submitBtn');
-        const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
-        const t = translations[lang];
-
-        // 1. 狀態保護
         if (btn.disabled) return;
+
+        // 鎖定按鈕並顯示讀取狀態
         btn.disabled = true;
         const originalText = btn.innerHTML;
         btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 處理中...`;
 
         try {
-            // 2. 確保 Auth 已就緒
-            if (!auth.currentUser) {
-                await signInAnonymously(auth);
+            // 1. 確保登入狀態
+            if (!currentUser) {
+                await initializeAuth();
+                if (!auth.currentUser) throw new Error("Auth required");
             }
 
-            // 3. 蒐集評分並判斷核心負評
+            const lang = document.querySelector('.lang-btn.active').id.split('-')[1];
+            const t = translations[lang];
+
+            // 2. 核心負評檢查
             const ratings = {};
             let hasCoreNegative = false;
             for(let i=1; i<=10; i++) {
-                const inputs = document.getElementsByName(`q${i}`);
-                const checked = Array.from(inputs).find(input => input.checked);
-                ratings[`q${i}`] = checked ? checked.value : null;
-                // Q1-Q7, Q10 為核心，第三個選項為負評
-                if ((i <= 7 || i === 10) && inputs[2].checked) hasCoreNegative = true;
+                const radios = document.getElementsByName(`q${i}`);
+                const selected = Array.from(radios).find(r => r.checked);
+                ratings[`q${i}`] = selected ? selected.value : null;
+                // Q1-Q7, Q10 為核心指標
+                if ((i <= 7 || i === 10) && radios[2].checked) hasCoreNegative = true;
             }
 
-            // 4. AI 情緒校驗
-            const suggest = document.getElementById('suggestions').value.trim();
-            const isNegativeText = await checkIsNegativeSentiment(suggest);
-            const isFiltered = hasCoreNegative || isNegativeText;
+            // 3. AI 分析 (異步，不影響主線寫入速度)
+            const suggestStr = document.getElementById('suggestions').value.trim();
+            const sentiment = await getSentimentAnalysis(suggestStr);
+            const isFiltered = hasCoreNegative || (sentiment === "NEGATIVE");
 
-            // 5. 寫入資料庫
+            // 4. Firestore 寫入 (嚴格遵守路徑規範)
             const surveyData = {
                 branch: t.branchName,
                 masseurId: document.getElementById('masseurId').value,
                 customerName: document.getElementById('custName').value || "Anonymous",
                 customerPhone: document.getElementById('custPhone').value || "N/A",
                 serviceDate: document.getElementById('serviceDate').value,
-                suggestions: suggest,
+                suggestions: suggestStr,
                 ratings: ratings,
                 submittedLang: lang,
                 createdAt: serverTimestamp(),
                 marketingAction: 'Pending',
                 isFilteredNegative: isFiltered,
-                uid: auth.currentUser?.uid || 'anonymous'
+                uid: auth.currentUser.uid
             };
 
-            const docRef = await addDoc(collection(db, ...SURVEY_COLLECTION_PATH), surveyData);
+            const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'surveys');
+            const docRef = await addDoc(collectionRef, surveyData);
             lastDocId = docRef.id;
 
-            // 6. 成功反饋與彈窗
+            // 5. 顯示成功模態視窗
             const gBtn = document.getElementById('googleReviewBtn');
             const mText = document.getElementById('modalText');
             const cBtn = document.getElementById('modalCloseBtn');
@@ -370,8 +388,8 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
 
         } catch (err) {
-            console.error("Submission failed:", err);
-            showToast("⚠️ 提交失敗，請檢查網路連線後再試。");
+            console.error("Critical Submission Error:", err);
+            showToast("⚠️ 提交失敗：請檢查網路連線或稍後再試", true);
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -382,7 +400,7 @@
         renderQuestions();
         applyDatePolicy();
         window.changeLang('zh');
-        signInAnonymously(auth).catch(e => console.error("Auth Fail"));
+        initializeAuth();
     };
 </script>
 </body>
